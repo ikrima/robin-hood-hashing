@@ -95,6 +95,13 @@ static Counts& counts() {
 // https://www.fluentcpp.com/2019/05/28/better-macros-better-flags/
 #define ROBIN_HOOD(x) ROBIN_HOOD_PRIVATE_DEFINITION_##x()
 
+#ifndef ROBINHOOD_MALLOC
+#define ROBINHOOD_MALLOC(sz) malloc(sz)
+#endif
+#ifndef ROBINHOOD_FREE
+#define ROBINHOOD_FREE(p)    free(p)
+#endif
+
 // mark unused members with this macro
 #define ROBIN_HOOD_UNUSED(identifier)
 
@@ -395,7 +402,7 @@ public:
     void reset() noexcept {
         while (mListForFree) {
             T* tmp = *mListForFree;
-            free(mListForFree);
+            ROBINHOOD_FREE(mListForFree);
             mListForFree = reinterpret_cast_no_cast_align_warning<T**>(tmp);
         }
         mHead = nullptr;
@@ -430,7 +437,7 @@ public:
         // calculate number of available elements in ptr
         if (numBytes < ALIGNMENT + ALIGNED_SIZE) {
             // not enough data for at least one element. Free and return.
-            free(ptr);
+            ROBINHOOD_FREE(ptr);
         } else {
             add(ptr, numBytes);
         }
@@ -497,7 +504,7 @@ private:
         // alloc new memory: [prev |T, T, ... T]
         // std::cout << (sizeof(T*) + ALIGNED_SIZE * numElementsToAlloc) << " bytes" << std::endl;
         size_t const bytes = ALIGNMENT + ALIGNED_SIZE * numElementsToAlloc;
-        add(assertNotNull<std::bad_alloc>(malloc(bytes)), bytes);
+        add(assertNotNull<std::bad_alloc>(ROBINHOOD_MALLOC(bytes)), bytes);
         return mHead;
     }
 
@@ -533,7 +540,7 @@ struct NodeAllocator<T, MinSize, MaxSize, true> {
 
     // we are not using the data, so just free it.
     void addOrFree(void* ptr, size_t ROBIN_HOOD_UNUSED(numBytes) /*unused*/) noexcept {
-        free(ptr);
+        ROBINHOOD_FREE(ptr);
     }
 };
 
@@ -1544,7 +1551,7 @@ public:
 
             auto const numElementsWithBuffer = calcNumElementsWithBuffer(o.mMask + 1);
             mKeyVals = static_cast<Node*>(detail::assertNotNull<std::bad_alloc>(
-                malloc(calcNumBytesTotal(numElementsWithBuffer))));
+                ROBINHOOD_MALLOC(calcNumBytesTotal(numElementsWithBuffer))));
             // no need for calloc because clonData does memcpy
             mInfo = reinterpret_cast<uint8_t*>(mKeyVals + numElementsWithBuffer);
             mNumElements = o.mNumElements;
@@ -1592,12 +1599,12 @@ public:
             // no luck: we don't have the same array size allocated, so we need to realloc.
             if (0 != mMask) {
                 // only deallocate if we actually have data!
-                free(mKeyVals);
+                ROBINHOOD_FREE(mKeyVals);
             }
 
             auto const numElementsWithBuffer = calcNumElementsWithBuffer(o.mMask + 1);
             mKeyVals = static_cast<Node*>(detail::assertNotNull<std::bad_alloc>(
-                malloc(calcNumBytesTotal(numElementsWithBuffer))));
+                ROBINHOOD_MALLOC(calcNumBytesTotal(numElementsWithBuffer))));
 
             // no need for calloc here because cloneData performs a memcpy.
             mInfo = reinterpret_cast<uint8_t*>(mKeyVals + numElementsWithBuffer);
@@ -2299,7 +2306,7 @@ private:
         // reports a compile error: attempt to free a non-heap object ‘fm’
         // [-Werror=free-nonheap-object]
         if (mKeyVals != reinterpret_cast_no_cast_align_warning<Node*>(&mMask)) {
-            free(mKeyVals);
+            ROBINHOOD_FREE(mKeyVals);
         }
     }
 
