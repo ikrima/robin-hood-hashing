@@ -98,10 +98,12 @@ static Counts& counts() {
 #ifndef ROBINHOOD_MALLOC
 #define ROBINHOOD_MALLOC(sz) malloc(sz)
 #endif
+#ifndef ROBINHOOD_CALLOC
+#define ROBINHOOD_CALLOC(cnt,sz) calloc(cnt,sz)
+#endif
 #ifndef ROBINHOOD_FREE
 #define ROBINHOOD_FREE(p)    free(p)
 #endif
-
 // mark unused members with this macro
 #define ROBIN_HOOD_UNUSED(identifier)
 
@@ -2119,7 +2121,7 @@ private:
 
         // calloc also zeroes everything
         mKeyVals = reinterpret_cast<Node*>(detail::assertNotNull<std::bad_alloc>(
-            calloc(1, calcNumBytesTotal(numElementsWithBuffer))));
+            ROBINHOOD_CALLOC(1, calcNumBytesTotal(numElementsWithBuffer))));
         mInfo = reinterpret_cast<uint8_t*>(mKeyVals + numElementsWithBuffer);
 
         // set sentinel
