@@ -1682,13 +1682,15 @@ public:
     template <typename Q = mapped_type>
     typename std::enable_if<!std::is_void<Q>::value, Q&>::type operator[](const key_type& key) {
         ROBIN_HOOD_TRACE(this)
-        return doCreateByKey(key);
+        return at(key);
+        //return doCreateByKey(key);
     }
 
     template <typename Q = mapped_type>
     typename std::enable_if<!std::is_void<Q>::value, Q&>::type operator[](key_type&& key) {
         ROBIN_HOOD_TRACE(this)
-        return doCreateByKey(std::move(key));
+        return at(key);
+        //return doCreateByKey(std::move(key));
     }
 
     template <typename Iter>
