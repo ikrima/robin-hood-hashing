@@ -1826,6 +1826,32 @@ public:
         return kv->getSecond();
     }
 
+    // Returns a pointer to the value found for key.
+    // Returns nullptr if element cannot be found
+    template <typename Q = mapped_type>
+    // NOLINTNEXTLINE(modernize-use-nodiscard)
+    typename std::enable_if<!std::is_void<Q>::value, Q*>::type tryGet(key_type const& key) {
+        ROBIN_HOOD_TRACE(this)
+        auto kv = mKeyVals + findIdx(key);
+        if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
+            return nullptr;
+        }
+        return &kv->getSecond();
+    }
+
+    // Returns a pointer to the value found for key.
+    // Returns nullptr if element cannot be found
+    template <typename Q = mapped_type>
+    // NOLINTNEXTLINE(modernize-use-nodiscard)
+    typename std::enable_if<!std::is_void<Q>::value, Q const*>::type tryGet(key_type const& key) const {
+        ROBIN_HOOD_TRACE(this)
+        auto kv = mKeyVals + findIdx(key);
+        if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
+            return nullptr;
+        }
+        return &kv->getSecond();
+    }
+
     const_iterator find(const key_type& key) const { // NOLINT(modernize-use-nodiscard)
         ROBIN_HOOD_TRACE(this)
         const size_t idx = findIdx(key);
