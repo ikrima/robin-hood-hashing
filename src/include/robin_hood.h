@@ -1830,11 +1830,11 @@ public:
     // Returns nullptr if element cannot be found
     template <typename Q = mapped_type>
     // NOLINTNEXTLINE(modernize-use-nodiscard)
-    typename std::enable_if<!std::is_void<Q>::value, Q*>::type tryGet(key_type const& key) {
+    typename std::enable_if<!std::is_void<Q>::value, Q*>::type tryGet(key_type const& key, Q* defaultValue = nullptr) {
         ROBIN_HOOD_TRACE(this)
         auto kv = mKeyVals + findIdx(key);
         if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
-            return nullptr;
+            return defaultValue;
         }
         return &kv->getSecond();
     }
@@ -1843,11 +1843,11 @@ public:
     // Returns nullptr if element cannot be found
     template <typename Q = mapped_type>
     // NOLINTNEXTLINE(modernize-use-nodiscard)
-    typename std::enable_if<!std::is_void<Q>::value, Q const*>::type tryGet(key_type const& key) const {
+    typename std::enable_if<!std::is_void<Q>::value, Q const*>::type tryGet(key_type const& key, Q const* defaultValue = nullptr) const {
         ROBIN_HOOD_TRACE(this)
         auto kv = mKeyVals + findIdx(key);
         if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
-            return nullptr;
+            return defaultValue;
         }
         return &kv->getSecond();
     }
