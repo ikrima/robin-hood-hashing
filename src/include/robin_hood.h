@@ -39,6 +39,8 @@
 #define ROBIN_HOOD_VERSION_MINOR 8 // for adding functionality in a backwards-compatible manner
 #define ROBIN_HOOD_VERSION_PATCH 1 // for backwards-compatible bug fixes
 
+#include "ES2/Core/ES2Allocator.h"
+
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
