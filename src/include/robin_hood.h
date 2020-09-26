@@ -1707,7 +1707,7 @@ public:
     }
 
     template <typename... Args>
-    std::pair<iterator, bool> emplace(Args&&... args) {
+    std::pair<iterator, bool> _emplace(Args&&... args) {
         ROBIN_HOOD_TRACE(this)
         Node n{*this, std::forward<Args>(args)...};
         auto r = doInsert(std::move(n));
@@ -1717,6 +1717,23 @@ public:
             n.destroy(*this);
         }
         return r;
+    }
+    template <typename... Args>
+    iterator emplace(const key_type& key, Args&&... args) {
+        std::pair<iterator, bool> rslt = try_emplace_impl(key, std::forward<Args>(args)...);
+        if (!rslt.second) {
+          doThrow<std::out_of_range>("key already exists");
+        }
+        return rslt.first;
+    }
+
+    template <typename... Args>
+    iterator emplace(key_type&& key, Args&&... args) {
+        std::pair<iterator, bool> rslt = try_emplace_impl(std::move(key), std::forward<Args>(args)...);
+        if (!rslt.second) {
+          doThrow<std::out_of_range>("key already exists");
+        }
+        return rslt.first;
     }
 
     template <typename... Args>
@@ -2127,7 +2144,7 @@ private:
         ROBIN_HOOD_TRACE(this)
         auto it = find(key);
         if (it == end()) {
-            return emplace(std::piecewise_construct,
+            return _emplace(std::piecewise_construct,
                            std::forward_as_tuple(std::forward<OtherKey>(key)),
                            std::forward_as_tuple(std::forward<Args>(args)...));
         }
