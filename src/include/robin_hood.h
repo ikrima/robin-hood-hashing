@@ -106,6 +106,9 @@ static Counts& counts() {
 #ifndef ROBINHOOD_FREE
 #define ROBINHOOD_FREE(p)    free(p)
 #endif
+#ifndef ROBINHOOD_ABORT
+#define ROBINHOOD_ABORT() abort()
+#endif
 // mark unused members with this macro
 #define ROBIN_HOOD_UNUSED(identifier)
 
@@ -341,7 +344,7 @@ void doThrow(Args&&... args) {
 }
 #else
 void doThrow(Args&&... ROBIN_HOOD_UNUSED(args) /*unused*/) {
-    abort();
+    ROBINHOOD_ABORT();
 }
 #endif
 
