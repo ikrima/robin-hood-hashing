@@ -6,6 +6,33 @@ cache: ccache
 matrix:
   include:
 
+  - os: osx
+    osx_image: xcode11.4
+    compiler: clang
+    env:
+    - COMPILER=clang++
+    - CMAKE_OPTIONS="-DRH_cxx_standard=17"
+
+  # compile on ARM
+  - os: linux
+    arch: arm64
+    compiler: gcc
+    env:
+    - COMPILER=g++-8
+    - CMAKE_OPTIONS="-DRH_sanitizer=OFF -DRH_cxx_standard=11"
+    addons:
+      apt:
+        sources: ['ubuntu-toolchain-r-test']
+        packages: ['g++-8']
+
+  # compile on S390x
+  - os: linux
+    arch: s390x
+    compiler: gcc
+    env:
+    - COMPILER=g++
+    - CMAKE_OPTIONS="-DRH_sanitizer=OFF -DRH_cxx_standard=11"
+
   # coverage
   - os: linux
     compiler: gcc
