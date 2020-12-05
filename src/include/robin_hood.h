@@ -1747,6 +1747,18 @@ public:
             insert(value_type(*first));
         }
     }
+    
+    template <typename Q = mapped_type>
+    typename std::enable_if<!std::is_void<Q>::value, Q&>::type getOrInsertDflt(const key_type& key) {
+        ROBIN_HOOD_TRACE(this)
+        return doCreateByKey(key);
+    }
+
+    template <typename Q = mapped_type>
+    typename std::enable_if<!std::is_void<Q>::value, Q&>::type getOrInsertDflt(key_type&& key) {
+        ROBIN_HOOD_TRACE(this)
+        return doCreateByKey(std::move(key));
+    }
 
     template <typename... Args>
     std::pair<iterator, bool> _emplace(Args&&... args) {
