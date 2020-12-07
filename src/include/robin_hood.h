@@ -38,6 +38,7 @@
 #define ROBIN_HOOD_VERSION_MINOR 9 // for adding functionality in a backwards-compatible manner
 #define ROBIN_HOOD_VERSION_PATCH 1 // for backwards-compatible bug fixes
 
+#include "es2/core/es2memops.h"
 #include "es2/core/es2allocatortypes.h"
 #include "es2/core/es2asserts.h"
 
