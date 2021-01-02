@@ -40,7 +40,7 @@
 
 #include "es2/core/es2memops.h"
 #include "es2/core/es2allocatortypes.h"
-#include "es2/core/es2asserts.h"
+#include "es2core/debug/es2assertmacros.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -1749,7 +1749,7 @@ public:
             insert(value_type(*first));
         }
     }
-    
+
     template <typename Q = mapped_type>
     typename std::enable_if<!std::is_void<Q>::value, Q&>::type getOrInsertDflt(const key_type& key) {
         ROBIN_HOOD_TRACE(this)
