@@ -370,18 +370,25 @@ inline T unaligned_load(void const* ptr) noexcept {
 template <typename T, size_t MinNumAllocs = 4, size_t MaxNumAllocs = 256>
 class BulkPoolAllocator {
 public:
-    BulkPoolAllocator() noexcept = default;
-
-    // does not copy anything, just creates a new allocator.
-    BulkPoolAllocator(const BulkPoolAllocator& ROBIN_HOOD_UNUSED(o) /*unused*/) noexcept
-        : mHead(nullptr)
+    explicit BulkPoolAllocator(es2::Allocator_ifc* es2_alctr) noexcept 
+        : es2_alctr(es2_alctr)
+        , mHead(nullptr)
         , mListForFree(nullptr) {}
 
+    // does not copy anything, just creates a new allocator.
+    BulkPoolAllocator(const BulkPoolAllocator& o) noexcept
+        : es2_alctr(o.es2_alctr)
+        , mHead(nullptr)
+        , mListForFree(nullptr) {
+    }
+
     BulkPoolAllocator(BulkPoolAllocator&& o) noexcept
-        : mHead(o.mHead)
+        : es2_alctr(o.es2_alctr)
+        , mHead(o.mHead)
         , mListForFree(o.mListForFree) {
         o.mListForFree = nullptr;
         o.mHead = nullptr;
+        o.es2_alctr = nullptr;
     }
 
     BulkPoolAllocator& operator=(BulkPoolAllocator&& o) noexcept {
@@ -404,12 +411,14 @@ public:
         reset();
     }
 
+    ROBIN_HOOD(NODISCARD) ES2INL(FRC) es2::Allocator_ifc* getAllocator() noexcept { return es2_alctr; }
+
     // Deallocates all allocated memory.
     void reset() noexcept {
         while (mListForFree) {
             T* tmp = *mListForFree;
             ROBIN_HOOD_LOG("std::free")
-            ROBINHOOD_FREE(mListForFree);
+            ROBINHOOD_FREE(mListForFree, sizeof(T));
             mListForFree = reinterpret_cast_no_cast_align_warning<T**>(tmp);
         }
         mHead = nullptr;
@@ -445,7 +454,7 @@ public:
         if (numBytes < ALIGNMENT + ALIGNED_SIZE) {
             // not enough data for at least one element. Free and return.
             ROBIN_HOOD_LOG("std::free")
-            ROBINHOOD_FREE(ptr);
+            ROBINHOOD_FREE(ptr, numBytes);
         } else {
             ROBIN_HOOD_LOG("add to buffer")
             add(ptr, numBytes);
@@ -454,6 +463,7 @@ public:
 
     void swap(BulkPoolAllocator<T, MinNumAllocs, MaxNumAllocs>& other) noexcept {
         using std::swap;
+        swap(es2_alctr, other.es2_alctr);
         swap(mHead, other.mHead);
         swap(mListForFree, other.mListForFree);
     }
@@ -537,6 +547,7 @@ private:
     static_assert(0 == (ALIGNED_SIZE % sizeof(T*)), "ALIGNED_SIZE mod");
     static_assert(ALIGNMENT >= sizeof(T*), "ALIGNMENT");
 
+    es2::Allocator_ifc* es2_alctr{nullptr};
     T* mHead{nullptr};
     T** mListForFree{nullptr};
 };
@@ -548,15 +559,21 @@ struct NodeAllocator;
 template <typename T, size_t MinSize, size_t MaxSize>
 struct NodeAllocator<T, MinSize, MaxSize, true> {
 
+    NodeAllocator(es2::Allocator_ifc* es2_alctr) noexcept : es2_alctr(es2_alctr) {}
+
     // we are not using the data, so just free it.
-    void addOrFree(void* ptr, size_t ROBIN_HOOD_UNUSED(numBytes) /*unused*/) noexcept {
+    void addOrFree(void* ptr, size_t numBytes) noexcept {
         ROBIN_HOOD_LOG("std::free")
-        ROBINHOOD_FREE(ptr);
+        ROBINHOOD_FREE(ptr, numBytes);
     }
+    
+    ROBIN_HOOD(NODISCARD) ES2INL(FRC) es2::Allocator_ifc* getAllocator() noexcept { return es2_alctr; }
+
+    es2::Allocator_ifc* es2_alctr = nullptr;
 };
 
 template <typename T, size_t MinSize, size_t MaxSize>
-struct NodeAllocator<T, MinSize, MaxSize, false> : public BulkPoolAllocator<T, MinSize, MaxSize> {};
+struct NodeAllocator<T, MinSize, MaxSize, false> : public BulkPoolAllocator<T, MinSize, MaxSize> { using BulkPoolAllocator<T,MinSize,MaxSize>::BulkPoolAllocator; };
 
 // dummy hash, unsed as mixer when robin_hood::hash is already used
 template <typename T>
@@ -1501,9 +1518,10 @@ public:
     using iterator = Iter<false>;
     using const_iterator = Iter<true>;
 
-    Table() noexcept(noexcept(Hash()) && noexcept(KeyEqual()))
+    Table(es2::Allocator_ifc* es2_alctr) noexcept(noexcept(Hash()) && noexcept(KeyEqual()))
         : WHash()
-        , WKeyEqual() {
+        , WKeyEqual()
+        , DataPool(es2_alctr) {
         ROBIN_HOOD_TRACE(this)
     }
 
@@ -1513,27 +1531,31 @@ public:
     // because everybody points to DummyInfoByte::b. parameter bucket_count is dictated by the
     // standard, but we can ignore it.
     explicit Table(
+        es2::Allocator_ifc* es2_alctr,
         size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/, const Hash& h = Hash{},
         const KeyEqual& equal = KeyEqual{}) noexcept(noexcept(Hash(h)) && noexcept(KeyEqual(equal)))
         : WHash(h)
-        , WKeyEqual(equal) {
+        , WKeyEqual(equal) 
+        , DataPool(es2_alctr) {
         ROBIN_HOOD_TRACE(this)
     }
 
     template <typename Iter>
-    Table(Iter first, Iter last, size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0,
+    Table(es2::Allocator_ifc* es2_alctr, Iter first, Iter last, size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0,
           const Hash& h = Hash{}, const KeyEqual& equal = KeyEqual{})
         : WHash(h)
-        , WKeyEqual(equal) {
+        , WKeyEqual(equal) 
+        , DataPool(es2_alctr) {
         ROBIN_HOOD_TRACE(this)
         insert(first, last);
     }
 
-    Table(std::initializer_list<value_type> initlist,
+    Table(es2::Allocator_ifc* es2_alctr, std::initializer_list<value_type> initlist,
           size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0, const Hash& h = Hash{},
           const KeyEqual& equal = KeyEqual{})
         : WHash(h)
-        , WKeyEqual(equal) {
+        , WKeyEqual(equal) 
+        , DataPool(es2_alctr) {
         ROBIN_HOOD_TRACE(this)
         insert(initlist.begin(), initlist.end());
     }
@@ -1647,7 +1669,9 @@ public:
             if (0 != mMask) {
                 // only deallocate if we actually have data!
                 ROBIN_HOOD_LOG("std::free")
-                ROBINHOOD_FREE(mKeyVals);
+                auto const oldNumElementsWithBuffer = calcNumElementsWithBuffer(mMask + 1);
+                auto const oldNumBytesTotal = calcNumBytesTotal(oldNumElementsWithBuffer);
+                ROBINHOOD_FREE(mKeyVals,oldNumBytesTotal);
             }
 
             auto const numElementsWithBuffer = calcNumElementsWithBuffer(o.mMask + 1);
@@ -2221,7 +2245,7 @@ private:
             if (oldKeyVals != reinterpret_cast_no_cast_align_warning<Node*>(&mMask)) {
                 // don't destroy old data: put it into the pool instead
                 if (forceFree) {
-                    std::free(oldKeyVals);
+                    ROBINHOOD_FREE(oldKeyVals, calcNumBytesTotal(oldMaxElementsWithBuffer));
                 } else {
                     DataPool::addOrFree(oldKeyVals, calcNumBytesTotal(oldMaxElementsWithBuffer));
                 }
@@ -2459,8 +2483,10 @@ private:
         // reports a compile error: attempt to free a non-heap object 'fm'
         // [-Werror=free-nonheap-object]
         if (mKeyVals != reinterpret_cast_no_cast_align_warning<Node*>(&mMask)) {
-            ROBIN_HOOD_LOG("std::free")
-            ROBINHOOD_FREE(mKeyVals);
+            ROBIN_HOOD_LOG("std::free")            
+            auto const numElementsWithBuffer = calcNumElementsWithBuffer(mMask + 1);
+            auto const numBytesTotal = calcNumBytesTotal(numElementsWithBuffer);
+            ROBINHOOD_FREE(mKeyVals,numBytesTotal);
         }
     }
 
