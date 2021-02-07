@@ -34,9 +34,9 @@
 #define ROBIN_HOOD_H_INCLUDED
 
 // see https://semver.org/
-#define ROBIN_HOOD_VERSION_MAJOR 3 // for incompatible API changes
-#define ROBIN_HOOD_VERSION_MINOR 9 // for adding functionality in a backwards-compatible manner
-#define ROBIN_HOOD_VERSION_PATCH 1 // for backwards-compatible bug fixes
+#define ROBIN_HOOD_VERSION_MAJOR 3  // for incompatible API changes
+#define ROBIN_HOOD_VERSION_MINOR 10 // for adding functionality in a backwards-compatible manner
+#define ROBIN_HOOD_VERSION_PATCH 0  // for backwards-compatible bug fixes
 
 #include "es2/core/es2memops.h"
 #include "es2/core/es2allocatortypes.h"
@@ -2065,6 +2065,27 @@ public:
         reserve(c, false);
     }
 
+    // If possible reallocates the map to a smaller one. This frees the underlying table.
+    // Does not do anything if load_factor is too large for decreasing the table's size.
+    void compact() {
+        ROBIN_HOOD_TRACE(this)
+        auto newSize = InitialNumElements;
+        while (calcMaxNumElementsAllowed(newSize) < mNumElements && newSize != 0) {
+            newSize *= 2;
+        }
+        if (ROBIN_HOOD_UNLIKELY(newSize == 0)) {
+            throwOverflowError();
+        }
+
+        ROBIN_HOOD_LOG("newSize > mMask + 1: " << newSize << " > " << mMask << " + 1")
+
+        // only actually do anything when the new size is bigger than the old one. This prevents to
+        // continuously allocate for each reserve() call.
+        if (newSize < mMask + 1) {
+            rehashPowerOfTwo(newSize, true);
+        }
+    }
+
     size_type size() const noexcept { // NOLINT(modernize-use-nodiscard)
         ROBIN_HOOD_TRACE(this)
         return mNumElements;
@@ -2169,13 +2190,13 @@ private:
         // only actually do anything when the new size is bigger than the old one. This prevents to
         // continuously allocate for each reserve() call.
         if (forceRehash || newSize > mMask + 1) {
-            rehashPowerOfTwo(newSize);
+            rehashPowerOfTwo(newSize, false);
         }
     }
 
     // reserves space for at least the specified number of elements.
     // only works if numBuckets if power of two
-    void rehashPowerOfTwo(size_t numBuckets) {
+    void rehashPowerOfTwo(size_t numBuckets, bool forceFree) {
         ROBIN_HOOD_TRACE(this)
 
         Node* const oldKeyVals = mKeyVals;
@@ -2199,7 +2220,11 @@ private:
             // [-Werror=free-nonheap-object]" warning.
             if (oldKeyVals != reinterpret_cast_no_cast_align_warning<Node*>(&mMask)) {
                 // don't destroy old data: put it into the pool instead
-                DataPool::addOrFree(oldKeyVals, calcNumBytesTotal(oldMaxElementsWithBuffer));
+                if (forceFree) {
+                    std::free(oldKeyVals);
+                } else {
+                    DataPool::addOrFree(oldKeyVals, calcNumBytesTotal(oldMaxElementsWithBuffer));
+                }
             }
         }
     }
@@ -2417,7 +2442,7 @@ private:
             throwOverflowError();
         }
 
-        rehashPowerOfTwo((mMask + 1) * 2);
+        rehashPowerOfTwo((mMask + 1) * 2, false);
     }
 
     void destroy() {
