@@ -42,17 +42,17 @@
 #include "es2/core/es2allocatortypes.h"
 #include "es2core/debug/es2assertmacros.h"
 
-#include <algorithm>
-#include <cstdlib>
-#include <cstring>
+//#include <algorithm>
+//#include <cstdlib>
+//#include <cstring>
 #include <functional>
-#include <memory> // only to support hash of smart pointers
-#include <stdexcept>
-#include <string>
+//#include <memory> // only to support hash of smart pointers
+//#include <stdexcept>
+//#include <string>
 #include <type_traits>
 #include <utility>
 #if __cplusplus >= 201703L
-#    include <string_view>
+//#    include <string_view>
 #endif
 
 // #define ROBIN_HOOD_LOG_ENABLED
