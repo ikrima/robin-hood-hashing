@@ -141,12 +141,15 @@ static Counts& counts() {
 #endif
 
 // exceptions
+#if defined(ROBIN_HOOD_OVERRIDE_HAS_EXCEPTIONS)
+#    define ROBIN_HOOD_PRIVATE_DEFINITION_HAS_EXCEPTIONS() ROBIN_HOOD_OVERRIDE_HAS_EXCEPTIONS()
+#else
 #if !defined(__cpp_exceptions) && !defined(__EXCEPTIONS) && !defined(_CPPUNWIND)
 #    define ROBIN_HOOD_PRIVATE_DEFINITION_HAS_EXCEPTIONS() 0
 #else
 #    define ROBIN_HOOD_PRIVATE_DEFINITION_HAS_EXCEPTIONS() 1
 #endif
-
+#endif
 // count leading/trailing bits
 #if !defined(ROBIN_HOOD_DISABLE_INTRINSICS)
 #    ifdef _MSC_VER
