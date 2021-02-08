@@ -335,6 +335,11 @@ inline T reinterpret_cast_no_cast_align_warning(void const* ptr) noexcept {
     return reinterpret_cast<T>(ptr);
 }
 
+#if ROBIN_HOOD(HAS_EXCEPTIONS)
+using out_of_range = std::out_of_range;
+#else
+using out_of_range = uint8_t;
+#endif
 // make sure this is not inlined as it is slow and dramatically enlarges code, thus making other
 // inlinings more difficult. Throws are also generally the slow path.
 template <typename E, typename... Args>
@@ -345,8 +350,8 @@ template <typename E, typename... Args>
     throw E(std::forward<Args>(args)...);
 }
 #else
-    void doThrow(Args&&... ROBIN_HOOD_UNUSED(args) /*unused*/) {
-    ROBINHOOD_ABORT();
+    void doThrow(Args&&... args) {
+    ROBINHOOD_ABORT(std::forward<Args>(args)...);
 }
 #endif
 
@@ -373,7 +378,7 @@ inline T unaligned_load(void const* ptr) noexcept {
 template <typename T, size_t MinNumAllocs = 4, size_t MaxNumAllocs = 256>
 class BulkPoolAllocator {
 public:
-    explicit BulkPoolAllocator(es2::Allocator_ifc* es2_alctr) noexcept 
+    explicit BulkPoolAllocator(es2::Allocator_ifc* es2_alctr) noexcept
         : es2_alctr(es2_alctr)
         , mHead(nullptr)
         , mListForFree(nullptr) {}
@@ -569,7 +574,7 @@ struct NodeAllocator<T, MinSize, MaxSize, true> {
         ROBIN_HOOD_LOG("std::free")
         ROBINHOOD_FREE(ptr, numBytes);
     }
-    
+
     ROBIN_HOOD(NODISCARD) ES2INL(FRC) es2::Allocator_ifc* getAllocator() noexcept { return es2_alctr; }
 
     es2::Allocator_ifc* es2_alctr = nullptr;
@@ -935,9 +940,9 @@ class Table
     : public WrapHash<Hash>,
       public WrapKeyEqual<KeyEqual>,
       detail::NodeAllocator<
-          typename std::conditional<
-              std::is_void<T>::value, Key,
-              robin_hood::pair<typename std::conditional<IsFlat, Key, Key const>::type, T>>::type,
+          typename std::conditional_t<
+              std::is_void_v<T>, Key,
+              robin_hood::pair<typename std::conditional_t<IsFlat, Key, Key const>, T>>,
           4, 16384, IsFlat> {
 public:
     static constexpr bool is_flat = IsFlat;
@@ -948,9 +953,9 @@ public:
 
     using key_type = Key;
     using mapped_type = T;
-    using value_type = typename std::conditional<
+    using value_type = typename std::conditional_t<
         is_set, Key,
-        robin_hood::pair<typename std::conditional<is_flat, Key, Key const>::type, T>>::type;
+        robin_hood::pair<typename std::conditional_t<is_flat, Key, Key const>, T>>;
     using size_type = size_t;
     using hasher = Hash;
     using key_equal = KeyEqual;
@@ -1538,7 +1543,7 @@ public:
         size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/, const Hash& h = Hash{},
         const KeyEqual& equal = KeyEqual{}) noexcept(noexcept(Hash(h)) && noexcept(KeyEqual(equal)))
         : WHash(h)
-        , WKeyEqual(equal) 
+        , WKeyEqual(equal)
         , DataPool(es2_alctr) {
         ROBIN_HOOD_TRACE(this)
     }
@@ -1547,7 +1552,7 @@ public:
     Table(es2::Allocator_ifc* es2_alctr, Iter first, Iter last, size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0,
           const Hash& h = Hash{}, const KeyEqual& equal = KeyEqual{})
         : WHash(h)
-        , WKeyEqual(equal) 
+        , WKeyEqual(equal)
         , DataPool(es2_alctr) {
         ROBIN_HOOD_TRACE(this)
         insert(first, last);
@@ -1557,7 +1562,7 @@ public:
           size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0, const Hash& h = Hash{},
           const KeyEqual& equal = KeyEqual{})
         : WHash(h)
-        , WKeyEqual(equal) 
+        , WKeyEqual(equal)
         , DataPool(es2_alctr) {
         ROBIN_HOOD_TRACE(this)
         insert(initlist.begin(), initlist.end());
@@ -1805,7 +1810,7 @@ public:
     iterator emplace(const key_type& key, Args&&... args) {
         std::pair<iterator, bool> rslt = try_emplace_impl(key, std::forward<Args>(args)...);
         if (!rslt.second) {
-          doThrow<std::out_of_range>("key already exists");
+          doThrow<detail::out_of_range>("key already exists");
         }
         return rslt.first;
     }
@@ -1814,7 +1819,7 @@ public:
     iterator emplace(key_type&& key, Args&&... args) {
         std::pair<iterator, bool> rslt = try_emplace_impl(std::move(key), std::forward<Args>(args)...);
         if (!rslt.second) {
-          doThrow<std::out_of_range>("key already exists");
+          doThrow<detail::out_of_range>("key already exists");
         }
         return rslt.first;
     }
@@ -1906,27 +1911,27 @@ public:
     }
 
     // Returns a reference to the value found for key.
-    // Throws std::out_of_range if element cannot be found
+    // Throws detail::out_of_range if element cannot be found
     template <typename Q = mapped_type>
     // NOLINTNEXTLINE(modernize-use-nodiscard)
     typename std::enable_if<!std::is_void<Q>::value, Q&>::type at(key_type const& key) {
         ROBIN_HOOD_TRACE(this)
         auto kv = mKeyVals + findIdx(key);
         if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
-            doThrow<std::out_of_range>("key not found");
+            doThrow<detail::out_of_range>("key not found");
         }
         return kv->getSecond();
     }
 
     // Returns a reference to the value found for key.
-    // Throws std::out_of_range if element cannot be found
+    // Throws detail::out_of_range if element cannot be found
     template <typename Q = mapped_type>
     // NOLINTNEXTLINE(modernize-use-nodiscard)
     typename std::enable_if<!std::is_void<Q>::value, Q const&>::type at(key_type const& key) const {
         ROBIN_HOOD_TRACE(this)
         auto kv = mKeyVals + findIdx(key);
         if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
-            doThrow<std::out_of_range>("key not found");
+            doThrow<detail::out_of_range>("key not found");
         }
         return kv->getSecond();
     }
@@ -1953,6 +1958,18 @@ public:
         auto kv = mKeyVals + findIdx(key);
         if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
             return defaultValue;
+        }
+        return &kv->getSecond();
+    }
+    // Returns a pointer to the value found for key.
+    // Returns nullptr if element cannot be found
+    template <typename Q = mapped_type>
+    // NOLINTNEXTLINE(modernize-use-nodiscard)
+    typename std::enable_if<!std::is_void<Q>::value, Q const*>::type tryGet(key_type const& key, Q const& defaultValue) const {
+        ROBIN_HOOD_TRACE(this)
+        auto kv = mKeyVals + findIdx(key);
+        if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
+            return &defaultValue;
         }
         return &kv->getSecond();
     }
@@ -2486,7 +2503,7 @@ private:
         // reports a compile error: attempt to free a non-heap object 'fm'
         // [-Werror=free-nonheap-object]
         if (mKeyVals != reinterpret_cast_no_cast_align_warning<Node*>(&mMask)) {
-            ROBIN_HOOD_LOG("std::free")            
+            ROBIN_HOOD_LOG("std::free")
             auto const numElementsWithBuffer = calcNumElementsWithBuffer(mMask + 1);
             auto const numBytesTotal = calcNumBytesTotal(numElementsWithBuffer);
             ROBINHOOD_FREE(mKeyVals,numBytesTotal);
