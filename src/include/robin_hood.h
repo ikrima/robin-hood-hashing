@@ -378,8 +378,8 @@ inline T unaligned_load(void const* ptr) noexcept {
 template <typename T, size_t MinNumAllocs = 4, size_t MaxNumAllocs = 256>
 class BulkPoolAllocator {
 public:
-    explicit BulkPoolAllocator(es2::Allocator_ifc* es2_alctr) noexcept
-        : es2_alctr(es2_alctr)
+    explicit BulkPoolAllocator(es2::Allocator_ifc* _alctr) noexcept
+        : es2_alctr(_alctr)
         , mHead(nullptr)
         , mListForFree(nullptr) {}
 
@@ -405,6 +405,7 @@ public:
         mListForFree = o.mListForFree;
         o.mListForFree = nullptr;
         o.mHead = nullptr;
+        o.es2_alctr = nullptr;
         return *this;
     }
 
@@ -418,8 +419,6 @@ public:
     ~BulkPoolAllocator() noexcept {
         reset();
     }
-
-    ROBIN_HOOD(NODISCARD) ES2INL(FRC) es2::Allocator_ifc* getAllocator() noexcept { return es2_alctr; }
 
     // Deallocates all allocated memory.
     void reset() noexcept {
@@ -554,8 +553,9 @@ private:
     static_assert(ALIGNED_SIZE >= sizeof(T*), "ALIGNED_SIZE");
     static_assert(0 == (ALIGNED_SIZE % sizeof(T*)), "ALIGNED_SIZE mod");
     static_assert(ALIGNMENT >= sizeof(T*), "ALIGNMENT");
-
+  public:
     es2::Allocator_ifc* es2_alctr{nullptr};
+  private:
     T* mHead{nullptr};
     T** mListForFree{nullptr};
 };
@@ -567,7 +567,7 @@ struct NodeAllocator;
 template <typename T, size_t MinSize, size_t MaxSize>
 struct NodeAllocator<T, MinSize, MaxSize, true> {
 
-    NodeAllocator(es2::Allocator_ifc* es2_alctr) noexcept : es2_alctr(es2_alctr) {}
+    NodeAllocator(es2::Allocator_ifc* _alctr) noexcept : es2_alctr(_alctr) {}
 
     // we are not using the data, so just free it.
     void addOrFree(void* ptr, size_t numBytes) noexcept {
@@ -575,8 +575,7 @@ struct NodeAllocator<T, MinSize, MaxSize, true> {
         ROBINHOOD_FREE(ptr, numBytes);
     }
 
-    ROBIN_HOOD(NODISCARD) ES2INL(FRC) es2::Allocator_ifc* getAllocator() noexcept { return es2_alctr; }
-
+    
     es2::Allocator_ifc* es2_alctr = nullptr;
 };
 
@@ -1526,11 +1525,26 @@ public:
     using iterator = Iter<false>;
     using const_iterator = Iter<true>;
 
-    Table(es2::Allocator_ifc* es2_alctr) noexcept(noexcept(Hash()) && noexcept(KeyEqual()))
+        
+    ES2INL(FRC) void create(es2::Allocator_ifc* _alctr, es2::idx_t _cap) noexcept {
+      grdchk1(this->es2_alctr == nullptr, "Allocator already exists!");
+      this->es2_alctr = _alctr;
+      if (_cap) reserve((size_t)_cap);
+    }
+
+    
+    Table(es2::StrgNoInitTag_t) noexcept(noexcept(Hash()) && noexcept(KeyEqual()))
         : WHash()
         , WKeyEqual()
-        , DataPool(es2_alctr) {
+        , DataPool(nullptr) {
         ROBIN_HOOD_TRACE(this)
+    }
+    Table(es2::idx_t _cap, es2::Allocator_ifc* _alctr) noexcept(noexcept(Hash()) && noexcept(KeyEqual()))
+        : WHash()
+        , WKeyEqual()
+        , DataPool(nullptr) {
+        ROBIN_HOOD_TRACE(this)
+        create(_alctr, _cap);
     }
 
     // Creates an empty hash map. Nothing is allocated yet, this happens at the first insert.
@@ -1539,31 +1553,31 @@ public:
     // because everybody points to DummyInfoByte::b. parameter bucket_count is dictated by the
     // standard, but we can ignore it.
     explicit Table(
-        es2::Allocator_ifc* es2_alctr,
+        es2::Allocator_ifc* _alctr,
         size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/, const Hash& h = Hash{},
         const KeyEqual& equal = KeyEqual{}) noexcept(noexcept(Hash(h)) && noexcept(KeyEqual(equal)))
         : WHash(h)
         , WKeyEqual(equal)
-        , DataPool(es2_alctr) {
+        , DataPool(_alctr) {
         ROBIN_HOOD_TRACE(this)
     }
 
     template <typename Iter>
-    Table(es2::Allocator_ifc* es2_alctr, Iter first, Iter last, size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0,
+    Table(es2::Allocator_ifc* _alctr, Iter first, Iter last, size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0,
           const Hash& h = Hash{}, const KeyEqual& equal = KeyEqual{})
         : WHash(h)
         , WKeyEqual(equal)
-        , DataPool(es2_alctr) {
+        , DataPool(_alctr) {
         ROBIN_HOOD_TRACE(this)
         insert(first, last);
     }
 
-    Table(es2::Allocator_ifc* es2_alctr, std::initializer_list<value_type> initlist,
+    Table(es2::Allocator_ifc* _alctr, std::initializer_list<value_type> initlist,
           size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0, const Hash& h = Hash{},
           const KeyEqual& equal = KeyEqual{})
         : WHash(h)
         , WKeyEqual(equal)
-        , DataPool(es2_alctr) {
+        , DataPool(_alctr) {
         ROBIN_HOOD_TRACE(this)
         insert(initlist.begin(), initlist.end());
     }
@@ -1588,6 +1602,8 @@ public:
 
     Table& operator=(Table&& o) noexcept {
         ROBIN_HOOD_TRACE(this)
+        //TODO: ikrimae: #TpLib-robinhood: Need to think about how to deal with allocators on copy/move
+        notimplemented();
         if (&o != this) {
             if (o.mMask) {
                 // only move stuff if the other map actually has some data
@@ -1645,6 +1661,8 @@ public:
     // NOLINTNEXTLINE(bugprone-unhandled-self-assignment,cert-oop54-cpp)
     Table& operator=(Table const& o) {
         ROBIN_HOOD_TRACE(this)
+        //TODO: ikrimae: #TpLib-robinhood: Need to think about how to deal with allocators on copy/move
+        notimplemented();
         if (&o == this) {
             // prevent assigning of itself
             return *this;
@@ -2277,7 +2295,7 @@ private:
 #if ROBIN_HOOD(HAS_EXCEPTIONS)
         throw std::overflow_error("robin_hood::map overflow");
 #else
-        abort();
+        ROBINHOOD_ABORT();
 #endif
     }
 
@@ -2488,7 +2506,7 @@ private:
 
         rehashPowerOfTwo((mMask + 1) * 2, false);
     }
-
+    public:
     void destroy() {
         if (0 == mMask) {
             // don't deallocate!
@@ -2509,7 +2527,7 @@ private:
             ROBINHOOD_FREE(mKeyVals,numBytesTotal);
         }
     }
-
+    private:
     void init() noexcept {
         mKeyVals = reinterpret_cast_no_cast_align_warning<Node*>(&mMask);
         mInfo = reinterpret_cast<uint8_t*>(&mMask);
