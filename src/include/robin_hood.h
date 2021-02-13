@@ -575,7 +575,7 @@ struct NodeAllocator<T, MinSize, MaxSize, true> {
         ROBINHOOD_FREE(ptr, numBytes);
     }
 
-    
+
     es2::Allocator_ifc* es2_alctr = nullptr;
 };
 
@@ -1525,14 +1525,14 @@ public:
     using iterator = Iter<false>;
     using const_iterator = Iter<true>;
 
-        
+    ES2INL(FRC) es2::Allocator_ifc* getAlctr() { return this->es2_alctr; }
     ES2INL(FRC) void create(es2::Allocator_ifc* _alctr, es2::idx_t _cap) noexcept {
       grdchk1(this->es2_alctr == nullptr, "Allocator already exists!");
       this->es2_alctr = _alctr;
       if (_cap) reserve((size_t)_cap);
     }
 
-    
+
     Table(es2::StrgNoInitTag_t) noexcept(noexcept(Hash()) && noexcept(KeyEqual()))
         : WHash()
         , WKeyEqual()
@@ -1918,13 +1918,13 @@ public:
         return 0;
     }
 
-    bool contains(const key_type& key) const { // NOLINT(modernize-use-nodiscard)
+    ES2INL(FRC) bool contains(const key_type& key) const { // NOLINT(modernize-use-nodiscard)
         return 1U == count(key);
     }
 
     template <typename OtherKey, typename Self_ = Self>
     // NOLINTNEXTLINE(modernize-use-nodiscard)
-    typename std::enable_if<Self_::is_transparent, bool>::type contains(const OtherKey& key) const {
+    ES2INL(FRC) typename std::enable_if<Self_::is_transparent, bool>::type contains(const OtherKey& key) const {
         return 1U == count(key);
     }
 
@@ -1983,13 +1983,13 @@ public:
     // Returns nullptr if element cannot be found
     template <typename Q = mapped_type>
     // NOLINTNEXTLINE(modernize-use-nodiscard)
-    typename std::enable_if<!std::is_void<Q>::value, Q const*>::type tryGet(key_type const& key, Q const& defaultValue) const {
+    ES2NODSCRD() typename std::enable_if<!std::is_void<Q>::value, Q const&>::type getOrDflt(key_type const& key, Q const& defaultValue) const {
         ROBIN_HOOD_TRACE(this)
         auto kv = mKeyVals + findIdx(key);
         if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
-            return &defaultValue;
+            return defaultValue;
         }
-        return &kv->getSecond();
+        return kv->getSecond();
     }
 
     const_iterator find(const key_type& key) const { // NOLINT(modernize-use-nodiscard)
