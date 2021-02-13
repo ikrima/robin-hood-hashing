@@ -82,7 +82,7 @@ struct Counts {
     uint64_t shiftUp{};
     uint64_t shiftDown{};
 };
-inline std::ostream& operator<<(std::ostream& os, Counts const& c) {
+ES2INL(FRC) std::ostream& operator<<(std::ostream& os, Counts const& c) {
     return os << c.shiftUp << " shiftUp" << std::endl << c.shiftDown << " shiftDown" << std::endl;
 }
 
@@ -342,12 +342,12 @@ T rotr(T x, unsigned k) {
 // 'uint64_t*' {aka 'long unsigned int*'} increases required alignment of target type". Use with
 // care!
 template <typename T>
-inline T reinterpret_cast_no_cast_align_warning(void* ptr) noexcept {
+ES2INL(FRC) T reinterpret_cast_no_cast_align_warning(void* ptr) noexcept {
     return reinterpret_cast<T>(ptr);
 }
 
 template <typename T>
-inline T reinterpret_cast_no_cast_align_warning(void const* ptr) noexcept {
+ES2INL(FRC) T reinterpret_cast_no_cast_align_warning(void const* ptr) noexcept {
     return reinterpret_cast<T>(ptr);
 }
 
@@ -380,7 +380,7 @@ T* assertNotNull(T* t, Args&&... args) {
 }
 
 template <typename T>
-inline T unaligned_load(void const* ptr) noexcept {
+ES2INL(FRC) T unaligned_load(void const* ptr) noexcept {
     // using memcpy so we don't get into unaligned load problems.
     // compiler should optimize this very well anyways.
     T t;
@@ -703,39 +703,39 @@ struct pair {
 };
 
 template <typename A, typename B>
-inline void swap(pair<A, B>& a, pair<A, B>& b) noexcept(
+ES2INL(FRC) void swap(pair<A, B>& a, pair<A, B>& b) noexcept(
     noexcept(std::declval<pair<A, B>&>().swap(std::declval<pair<A, B>&>()))) {
     a.swap(b);
 }
 
 template <typename A, typename B>
-inline constexpr bool operator==(pair<A, B> const& x, pair<A, B> const& y) {
+ES2INL(FRC) constexpr bool operator==(pair<A, B> const& x, pair<A, B> const& y) {
     return (x.first == y.first) && (x.second == y.second);
 }
 template <typename A, typename B>
-inline constexpr bool operator!=(pair<A, B> const& x, pair<A, B> const& y) {
+ES2INL(FRC) constexpr bool operator!=(pair<A, B> const& x, pair<A, B> const& y) {
     return !(x == y);
 }
 template <typename A, typename B>
-inline constexpr bool operator<(pair<A, B> const& x, pair<A, B> const& y) noexcept(noexcept(
+ES2INL(FRC) constexpr bool operator<(pair<A, B> const& x, pair<A, B> const& y) noexcept(noexcept(
     std::declval<A const&>() < std::declval<A const&>()) && noexcept(std::declval<B const&>() <
                                                                      std::declval<B const&>())) {
     return x.first < y.first || (!(y.first < x.first) && x.second < y.second);
 }
 template <typename A, typename B>
-inline constexpr bool operator>(pair<A, B> const& x, pair<A, B> const& y) {
+ES2INL(FRC) constexpr bool operator>(pair<A, B> const& x, pair<A, B> const& y) {
     return y < x;
 }
 template <typename A, typename B>
-inline constexpr bool operator<=(pair<A, B> const& x, pair<A, B> const& y) {
+ES2INL(FRC) constexpr bool operator<=(pair<A, B> const& x, pair<A, B> const& y) {
     return !(x > y);
 }
 template <typename A, typename B>
-inline constexpr bool operator>=(pair<A, B> const& x, pair<A, B> const& y) {
+ES2INL(FRC) constexpr bool operator>=(pair<A, B> const& x, pair<A, B> const& y) {
     return !(x < y);
 }
 
-inline size_t hash_bytes(void const* ptr, size_t len) noexcept {
+ES2INL(FRC) size_t hash_bytes(void const* ptr, size_t len) noexcept {
     static constexpr uint64_t m = UINT64_C(0xc6a4a7935bd1e995);
     static constexpr uint64_t seed = UINT64_C(0xe17a1465);
     static constexpr unsigned int r = 47;
@@ -789,7 +789,7 @@ inline size_t hash_bytes(void const* ptr, size_t len) noexcept {
     return static_cast<size_t>(h);
 }
 
-inline size_t hash_int(uint64_t x) noexcept {
+ES2INL(FRC) size_t hash_int(uint64_t x) noexcept {
     // inspired by lemire's strongly universal hashing
     // https://lemire.me/blog/2018/08/15/fast-strongly-universal-64-bit-hashing-everywhere/
     //
