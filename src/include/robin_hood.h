@@ -907,21 +907,6 @@ template <typename T>
 struct has_is_transparent<T, typename void_type<typename T::is_transparent>::type>
     : public std::true_type {};
 
-// using wrapper classes for hash and key_equal prevents the diamond problem when the same type
-// is used. see https://stackoverflow.com/a/28771920/48181
-template <typename T>
-struct WrapHash : public T {
-    WrapHash() = default;
-    explicit WrapHash(T const& o) noexcept(noexcept(T(std::declval<T const&>())))
-        : T(o) {}
-};
-
-template <typename T>
-struct WrapKeyEqual : public T {
-    WrapKeyEqual() = default;
-    explicit WrapKeyEqual(T const& o) noexcept(noexcept(T(std::declval<T const&>())))
-        : T(o) {}
-};
 
 // A highly optimized hashmap implementation, using the Robin Hood algorithm.
 //
@@ -949,12 +934,9 @@ struct WrapKeyEqual : public T {
 // According to STL, order of templates has effect on throughput. That's why I've moved the
 // boolean to the front.
 // https://www.reddit.com/r/cpp/comments/ahp6iu/compile_time_binary_size_reductions_and_cs_future/eeguck4/
-template <bool IsFlat, size_t MaxLoadFactor100, typename Key, typename T, typename Hash,
-          typename KeyEqual>
+template <bool IsFlat, typename Key, typename T, typename KeyInfoTy>
 class Table
-    : public WrapHash<Hash>,
-      public WrapKeyEqual<KeyEqual>,
-      detail::NodeAllocator<
+    : detail::NodeAllocator<
           typename std::conditional_t<
               std::is_void_v<T>, Key,
               robin_hood::pair<typename std::conditional_t<IsFlat, Key, Key const>, T>>,
@@ -963,8 +945,7 @@ public:
     static constexpr bool is_flat = IsFlat;
     static constexpr bool is_map = !std::is_void<T>::value;
     static constexpr bool is_set = !is_map;
-    static constexpr bool is_transparent =
-        has_is_transparent<Hash>::value && has_is_transparent<KeyEqual>::value;
+    static constexpr bool is_transparent = has_is_transparent<KeyInfoTy>::value;
 
     using key_type = Key;
     using mapped_type = T;
@@ -972,16 +953,11 @@ public:
         is_set, Key,
         robin_hood::pair<typename std::conditional_t<is_flat, Key, Key const>, T>>;
     using size_type = size_t;
-    using hasher = Hash;
-    using key_equal = KeyEqual;
-    using Self = Table<IsFlat, MaxLoadFactor100, key_type, mapped_type, hasher, key_equal>;
+    using Self = Table<IsFlat, key_type, mapped_type, KeyInfoTy>;
 
-private:
-    static_assert(MaxLoadFactor100 > 10 && MaxLoadFactor100 < 100,
+protected:
+    static_assert(KeyInfoTy::MaxLoadFactor100 > 10 && KeyInfoTy::MaxLoadFactor100 < 100,
                   "MaxLoadFactor100 needs to be >10 && < 100");
-
-    using WHash = WrapHash<Hash>;
-    using WKeyEqual = WrapKeyEqual<KeyEqual>;
 
     // configuration defaults
 
@@ -1379,7 +1355,7 @@ private:
 #endif
         }
 
-        friend class Table<IsFlat, MaxLoadFactor100, key_type, mapped_type, hasher, key_equal>;
+        friend class Table<IsFlat, key_type, mapped_type, KeyInfoTy>;
         NodePtr mKeyVals{nullptr};
         uint8_t const* mInfo{nullptr};
     };
@@ -1391,16 +1367,12 @@ private:
     // The upper 1-5 bits need to be a reasonable good hash, to save comparisons.
     template <typename HashKey>
     void keyToIdx(HashKey&& key, size_t* idx, InfoType* info) const {
+        auto h = KeyInfoTy::getHashValue(key);
         // for a user-specified hash that is *not* robin_hood::hash, apply robin_hood::hash as
         // an additional mixing step. This serves as a bad hash prevention, if the given data is
         // badly mixed.
-        using Mix =
-            typename std::conditional<std::is_same<::robin_hood::hash<key_type>, hasher>::value,
-                                      ::robin_hood::detail::identity_hash<size_t>,
-                                      ::robin_hood::hash<size_t>>::type;
-
+        if constexpr(!es2::is_same_v<::es2::MapKeyInfo<key_type>, KeyInfoTy>) { h = rh_hash_int(h); }
         // the lower InitialInfoNumBits are reserved for info.
-        auto h = Mix{}(WHash::operator()(key));
         *info = mInfoInc + static_cast<InfoType>((h & InfoMask) >> mInfoHashShift);
         *idx = (h >> InitialInfoNumBits) & mMask;
     }
@@ -1470,12 +1442,12 @@ private:
         do {
             // unrolling this twice gives a bit of a speedup. More unrolling did not help.
             if (info == mInfo[idx] &&
-                ROBIN_HOOD_LIKELY(WKeyEqual::operator()(key, mKeyVals[idx].getFirst()))) {
+                ROBIN_HOOD_LIKELY(KeyInfoTy::isKeyEqual(key, mKeyVals[idx].getFirst()))) {
                 return idx;
             }
             next(&info, &idx);
             if (info == mInfo[idx] &&
-                ROBIN_HOOD_LIKELY(WKeyEqual::operator()(key, mKeyVals[idx].getFirst()))) {
+                ROBIN_HOOD_LIKELY(KeyInfoTy::isKeyEqual(key, mKeyVals[idx].getFirst()))) {
                 return idx;
             }
             next(&info, &idx);
@@ -1549,16 +1521,12 @@ public:
     }
 
 
-    Table(es2::StrgNoInitTag_t) noexcept(noexcept(Hash()) && noexcept(KeyEqual()))
-        : WHash()
-        , WKeyEqual()
-        , DataPool(nullptr) {
+    Table(es2::StrgNoInitTag_t) noexcept
+        : DataPool(nullptr) {
         ROBIN_HOOD_TRACE(this)
     }
-    Table(es2::idx_t _cap, es2::Allocator_ifc* _alctr) noexcept(noexcept(Hash()) && noexcept(KeyEqual()))
-        : WHash()
-        , WKeyEqual()
-        , DataPool(nullptr) {
+    Table(es2::idx_t _cap, es2::Allocator_ifc* _alctr) noexcept
+        : DataPool(nullptr) {
         ROBIN_HOOD_TRACE(this)
         create(_alctr, _cap);
     }
@@ -1570,38 +1538,27 @@ public:
     // standard, but we can ignore it.
     explicit Table(
         es2::Allocator_ifc* _alctr,
-        size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/, const Hash& h = Hash{},
-        const KeyEqual& equal = KeyEqual{}) noexcept(noexcept(Hash(h)) && noexcept(KeyEqual(equal)))
-        : WHash(h)
-        , WKeyEqual(equal)
-        , DataPool(_alctr) {
+        size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/) noexcept
+        : DataPool(_alctr) {
         ROBIN_HOOD_TRACE(this)
     }
 
     template <typename Iter>
-    Table(es2::Allocator_ifc* _alctr, Iter first, Iter last, size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0,
-          const Hash& h = Hash{}, const KeyEqual& equal = KeyEqual{})
-        : WHash(h)
-        , WKeyEqual(equal)
-        , DataPool(_alctr) {
+    Table(es2::Allocator_ifc* _alctr, Iter first, Iter last, size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0)
+        : DataPool(_alctr) {
         ROBIN_HOOD_TRACE(this)
         insert(first, last);
     }
 
     Table(es2::Allocator_ifc* _alctr, std::initializer_list<value_type> initlist,
-          size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0, const Hash& h = Hash{},
-          const KeyEqual& equal = KeyEqual{})
-        : WHash(h)
-        , WKeyEqual(equal)
-        , DataPool(_alctr) {
+          size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0)
+        : DataPool(_alctr) {
         ROBIN_HOOD_TRACE(this)
         insert(initlist.begin(), initlist.end());
     }
 
     Table(Table&& o) noexcept
-        : WHash(std::move(static_cast<WHash&>(o)))
-        , WKeyEqual(std::move(static_cast<WKeyEqual&>(o)))
-        , DataPool(std::move(static_cast<DataPool&>(o))) {
+        : DataPool(std::move(static_cast<DataPool&>(o))) {
         ROBIN_HOOD_TRACE(this)
         if (o.mMask) {
             mKeyVals = std::move(o.mKeyVals);
@@ -1631,8 +1588,6 @@ public:
                 mMaxNumElementsAllowed = std::move(o.mMaxNumElementsAllowed);
                 mInfoInc = std::move(o.mInfoInc);
                 mInfoHashShift = std::move(o.mInfoHashShift);
-                WHash::operator=(std::move(static_cast<WHash&>(o)));
-                WKeyEqual::operator=(std::move(static_cast<WKeyEqual&>(o)));
                 DataPool::operator=(std::move(static_cast<DataPool&>(o)));
 
                 o.init();
@@ -1646,9 +1601,7 @@ public:
     }
 
     Table(const Table& o)
-        : WHash(static_cast<const WHash&>(o))
-        , WKeyEqual(static_cast<const WKeyEqual&>(o))
-        , DataPool(static_cast<const DataPool&>(o)) {
+        : DataPool(static_cast<const DataPool&>(o)) {
         ROBIN_HOOD_TRACE(this)
         if (!o.empty()) {
             // not empty: create an exact copy. it is also possible to just iterate through all
@@ -1696,8 +1649,6 @@ public:
             // clear also resets mInfo to 0, that's sometimes not necessary.
             destroy();
             init();
-            WHash::operator=(static_cast<const WHash&>(o));
-            WKeyEqual::operator=(static_cast<const WKeyEqual&>(o));
             DataPool::operator=(static_cast<DataPool const&>(o));
 
             return *this;
@@ -1727,8 +1678,6 @@ public:
             mInfo = reinterpret_cast<uint8_t*>(mKeyVals + numElementsWithBuffer);
             // sentinel is set in cloneData
         }
-        WHash::operator=(static_cast<const WHash&>(o));
-        WKeyEqual::operator=(static_cast<const WKeyEqual&>(o));
         DataPool::operator=(static_cast<DataPool const&>(o));
         mNumElements = o.mNumElements;
         mMask = o.mMask;
@@ -1743,8 +1692,7 @@ public:
     // Swaps everything between the two maps.
     void swap(Table& o) {
         ROBIN_HOOD_TRACE(this)
-        using std::swap;
-        swap(o, *this);
+        std::swap(o, *this);
     }
 
     // Clears all data, without resizing.
@@ -1816,18 +1764,6 @@ public:
         }
     }
 
-    template <typename Q = mapped_type>
-    typename std::enable_if<!std::is_void<Q>::value, Q&>::type getOrInsertDflt(const key_type& key) {
-        ROBIN_HOOD_TRACE(this)
-        return doCreateByKey(key);
-    }
-
-    template <typename Q = mapped_type>
-    typename std::enable_if<!std::is_void<Q>::value, Q&>::type getOrInsertDflt(key_type&& key) {
-        ROBIN_HOOD_TRACE(this)
-        return doCreateByKey(std::move(key));
-    }
-
     template <typename... Args>
     std::pair<iterator, bool> _emplace(Args&&... args) {
         ROBIN_HOOD_TRACE(this)
@@ -1839,23 +1775,6 @@ public:
             n.destroy(*this);
         }
         return r;
-    }
-    template <typename... Args>
-    iterator emplace(const key_type& key, Args&&... args) {
-        std::pair<iterator, bool> rslt = try_emplace_impl(key, std::forward<Args>(args)...);
-        if (!rslt.second) {
-          doThrow<detail::out_of_range>("key already exists");
-        }
-        return rslt.first;
-    }
-
-    template <typename... Args>
-    iterator emplace(key_type&& key, Args&&... args) {
-        std::pair<iterator, bool> rslt = try_emplace_impl(std::move(key), std::forward<Args>(args)...);
-        if (!rslt.second) {
-          doThrow<detail::out_of_range>("key already exists");
-        }
-        return rslt.first;
     }
 
     template <typename... Args>
@@ -1934,13 +1853,12 @@ public:
         return 0;
     }
 
-    ES2INL(FRC) bool contains(const key_type& key) const { // NOLINT(modernize-use-nodiscard)
+    ROBIN_HOOD(NODISCARD) ES2INL(FRC) bool contains(const key_type& key) const {
         return 1U == count(key);
     }
 
     template <typename OtherKey, typename Self_ = Self>
-    // NOLINTNEXTLINE(modernize-use-nodiscard)
-    ES2INL(FRC) typename std::enable_if<Self_::is_transparent, bool>::type contains(const OtherKey& key) const {
+    ROBIN_HOOD(NODISCARD) ES2INL(FRC) typename std::enable_if<Self_::is_transparent, bool>::type contains(const OtherKey& key) const {
         return 1U == count(key);
     }
 
@@ -1966,44 +1884,6 @@ public:
         auto kv = mKeyVals + findIdx(key);
         if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
             doThrow<detail::out_of_range>("key not found");
-        }
-        return kv->getSecond();
-    }
-
-    // Returns a pointer to the value found for key.
-    // Returns nullptr if element cannot be found
-    template <typename Q = mapped_type>
-    // NOLINTNEXTLINE(modernize-use-nodiscard)
-    typename std::enable_if<!std::is_void<Q>::value, Q*>::type tryGet(key_type const& key, Q* defaultValue = nullptr) {
-        ROBIN_HOOD_TRACE(this)
-        auto kv = mKeyVals + findIdx(key);
-        if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
-            return defaultValue;
-        }
-        return &kv->getSecond();
-    }
-
-    // Returns a pointer to the value found for key.
-    // Returns nullptr if element cannot be found
-    template <typename Q = mapped_type>
-    // NOLINTNEXTLINE(modernize-use-nodiscard)
-    typename std::enable_if<!std::is_void<Q>::value, Q const*>::type tryGet(key_type const& key, Q const* defaultValue = nullptr) const {
-        ROBIN_HOOD_TRACE(this)
-        auto kv = mKeyVals + findIdx(key);
-        if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
-            return defaultValue;
-        }
-        return &kv->getSecond();
-    }
-    // Returns a pointer to the value found for key.
-    // Returns nullptr if element cannot be found
-    template <typename Q = mapped_type>
-    // NOLINTNEXTLINE(modernize-use-nodiscard)
-    ES2NODSCRD() typename std::enable_if<!std::is_void<Q>::value, Q const&>::type getOrDflt(key_type const& key, Q const& defaultValue) const {
-        ROBIN_HOOD_TRACE(this)
-        auto kv = mKeyVals + findIdx(key);
-        if (kv == reinterpret_cast_no_cast_align_warning<Node*>(mInfo)) {
-            return defaultValue;
         }
         return kv->getSecond();
     }
@@ -2117,7 +1997,7 @@ public:
 
         // check while info matches with the source idx
         do {
-            if (info == mInfo[idx] && WKeyEqual::operator()(key, mKeyVals[idx].getFirst())) {
+            if (info == mInfo[idx] && KeyInfoTy::isKeyEqual(key, mKeyVals[idx].getFirst())) {
                 shiftDown(idx);
                 --mNumElements;
                 return 1;
@@ -2181,7 +2061,7 @@ public:
 
     float max_load_factor() const noexcept { // NOLINT(modernize-use-nodiscard)
         ROBIN_HOOD_TRACE(this)
-        return MaxLoadFactor100 / 100.0F;
+        return KeyInfoTy::MaxLoadFactor100 / 100.0F;
     }
 
     // Average number of elements per bucket. Since we allow only 1 per bucket
@@ -2197,11 +2077,11 @@ public:
 
     ROBIN_HOOD(NODISCARD) size_t calcMaxNumElementsAllowed(size_t maxElements) const noexcept {
         if (ROBIN_HOOD_LIKELY(maxElements <= (std::numeric_limits<size_t>::max)() / 100)) {
-            return maxElements * MaxLoadFactor100 / 100;
+            return maxElements * KeyInfoTy::MaxLoadFactor100 / 100;
         }
 
         // we might be a bit inprecise, but since maxElements is quite large that doesn't matter
-        return (maxElements / 100) * MaxLoadFactor100;
+        return (maxElements / 100) * KeyInfoTy::MaxLoadFactor100;
     }
 
     ROBIN_HOOD(NODISCARD) size_t calcNumBytesInfo(size_t numElements) const noexcept {
@@ -2236,7 +2116,7 @@ public:
 #endif
     }
 
-private:
+protected:
     template <typename Q = mapped_type>
     ROBIN_HOOD(NODISCARD)
     typename std::enable_if<!std::is_void<Q>::value, bool>::type has(const value_type& e) const {
@@ -2332,7 +2212,7 @@ private:
         ROBIN_HOOD_TRACE(this)
         auto it = find(key);
         if (it == end()) {
-            return emplace(std::forward<OtherKey>(key), std::forward<Mapped>(obj));
+            return _emplace(std::forward<OtherKey>(key), std::forward<Mapped>(obj));
         }
         it->second = std::forward<Mapped>(obj);
         return {it, false};
@@ -2371,7 +2251,7 @@ private:
             // while we potentially have a match. Can't do a do-while here because when mInfo is
             // 0 we don't want to skip forward
             while (info == mInfo[idx]) {
-                if (WKeyEqual::operator()(key, mKeyVals[idx].getFirst())) {
+                if (KeyInfoTy::isKeyEqual(key, mKeyVals[idx].getFirst())) {
                     // key already exists, do not insert.
                     return mKeyVals[idx].getSecond();
                 }
@@ -2428,7 +2308,7 @@ private:
 
             // while we potentially have a match
             while (info == mInfo[idx]) {
-                if (WKeyEqual::operator()(getFirstConst(keyval), mKeyVals[idx].getFirst())) {
+                if (KeyInfoTy::isKeyEqual(getFirstConst(keyval), mKeyVals[idx].getFirst())) {
                     // key already exists, do NOT insert.
                     // see http://en.cppreference.com/w/cpp/container/unordered_map/insert
                     return std::make_pair<iterator, bool>(iterator(mKeyVals + idx, mInfo + idx),
@@ -2554,6 +2434,7 @@ private:
         mInfoHashShift = InitialInfoHashShift;
     }
 
+    protected:
     // members are sorted so no padding occurs
     Node* mKeyVals = reinterpret_cast_no_cast_align_warning<Node*>(&mMask); // 8 byte  8
     uint8_t* mInfo = reinterpret_cast<uint8_t*>(&mMask);                    // 8 byte 16
@@ -2569,38 +2450,32 @@ private:
 
 // map
 
-template <typename Key, typename T, typename Hash = hash<Key>,
-          typename KeyEqual = std::equal_to<Key>, size_t MaxLoadFactor100 = 80>
-using unordered_flat_map = detail::Table<true, MaxLoadFactor100, Key, T, Hash, KeyEqual>;
+template <typename Key, typename T, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
+using unordered_flat_map = detail::Table<true, Key, T, KeyInfoTy>;
 
-template <typename Key, typename T, typename Hash = hash<Key>,
-          typename KeyEqual = std::equal_to<Key>, size_t MaxLoadFactor100 = 80>
-using unordered_node_map = detail::Table<false, MaxLoadFactor100, Key, T, Hash, KeyEqual>;
+template <typename Key, typename T, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
+using unordered_node_map = detail::Table<false, Key, T, KeyInfoTy>;
 
-template <typename Key, typename T, typename Hash = hash<Key>,
-          typename KeyEqual = std::equal_to<Key>, size_t MaxLoadFactor100 = 80>
+template <typename Key, typename T, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
 using unordered_map =
     detail::Table<sizeof(robin_hood::pair<Key, T>) <= sizeof(size_t) * 6 &&
                       std::is_nothrow_move_constructible<robin_hood::pair<Key, T>>::value &&
                       std::is_nothrow_move_assignable<robin_hood::pair<Key, T>>::value,
-                  MaxLoadFactor100, Key, T, Hash, KeyEqual>;
+                  Key, T, KeyInfoTy>;
 
 // set
 
-template <typename Key, typename Hash = hash<Key>, typename KeyEqual = std::equal_to<Key>,
-          size_t MaxLoadFactor100 = 80>
-using unordered_flat_set = detail::Table<true, MaxLoadFactor100, Key, void, Hash, KeyEqual>;
+template <typename Key, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
+using unordered_flat_set = detail::Table<true, Key, void, KeyInfoTy>;
 
-template <typename Key, typename Hash = hash<Key>, typename KeyEqual = std::equal_to<Key>,
-          size_t MaxLoadFactor100 = 80>
-using unordered_node_set = detail::Table<false, MaxLoadFactor100, Key, void, Hash, KeyEqual>;
+template <typename Key, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
+using unordered_node_set = detail::Table<false, Key, void, KeyInfoTy>;
 
-template <typename Key, typename Hash = hash<Key>, typename KeyEqual = std::equal_to<Key>,
-          size_t MaxLoadFactor100 = 80>
+template <typename Key, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
 using unordered_set = detail::Table<sizeof(Key) <= sizeof(size_t) * 6 &&
                                         std::is_nothrow_move_constructible<Key>::value &&
                                         std::is_nothrow_move_assignable<Key>::value,
-                                    MaxLoadFactor100, Key, void, Hash, KeyEqual>;
+                                    Key, void, KeyInfoTy>;
 
 } // namespace robin_hood
 
