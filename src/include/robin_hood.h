@@ -946,7 +946,7 @@ public:
     static constexpr bool is_map = !std::is_void<T>::value;
     static constexpr bool is_set = !is_map;
     static constexpr bool is_transparent = has_is_transparent<KeyInfoTy>::value;
-
+    static constexpr size_t MaxLoadFactor100 = KeyInfoTy::MaxLoadFactor100;
     using key_type = Key;
     using mapped_type = T;
     using value_type = typename std::conditional_t<
@@ -956,7 +956,7 @@ public:
     using Self = Table<IsFlat, key_type, mapped_type, KeyInfoTy>;
 
 protected:
-    static_assert(KeyInfoTy::MaxLoadFactor100 > 10 && KeyInfoTy::MaxLoadFactor100 < 100,
+    static_assert(MaxLoadFactor100 > 10 && MaxLoadFactor100 < 100,
                   "MaxLoadFactor100 needs to be >10 && < 100");
 
     // configuration defaults
@@ -2061,7 +2061,7 @@ public:
 
     float max_load_factor() const noexcept { // NOLINT(modernize-use-nodiscard)
         ROBIN_HOOD_TRACE(this)
-        return KeyInfoTy::MaxLoadFactor100 / 100.0F;
+        return MaxLoadFactor100 / 100.0F;
     }
 
     // Average number of elements per bucket. Since we allow only 1 per bucket
@@ -2077,11 +2077,11 @@ public:
 
     ROBIN_HOOD(NODISCARD) size_t calcMaxNumElementsAllowed(size_t maxElements) const noexcept {
         if (ROBIN_HOOD_LIKELY(maxElements <= (std::numeric_limits<size_t>::max)() / 100)) {
-            return maxElements * KeyInfoTy::MaxLoadFactor100 / 100;
+            return maxElements * MaxLoadFactor100 / 100;
         }
 
         // we might be a bit inprecise, but since maxElements is quite large that doesn't matter
-        return (maxElements / 100) * KeyInfoTy::MaxLoadFactor100;
+        return (maxElements / 100) * MaxLoadFactor100;
     }
 
     ROBIN_HOOD(NODISCARD) size_t calcNumBytesInfo(size_t numElements) const noexcept {
