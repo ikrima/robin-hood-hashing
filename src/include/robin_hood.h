@@ -1648,7 +1648,6 @@ public:
             // not empty: destroy what we have there
             // clear also resets mInfo to 0, that's sometimes not necessary.
             destroy();
-            init();
             DataPool::operator=(static_cast<DataPool const&>(o));
 
             return *this;
@@ -2422,6 +2421,8 @@ protected:
             auto const numBytesTotal = calcNumBytesTotal(numElementsWithBuffer);
             ROBINHOOD_FREE(mKeyVals,numBytesTotal);
         }
+        
+        init();
     }
     private:
     void init() noexcept {
