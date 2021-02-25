@@ -1515,7 +1515,7 @@ public:
 
     ES2INL(F) es2::Allocator_ifc* getAlctr() { return this->es2_alctr; }
     ES2INL(F) void create(es2::Allocator_ifc* _alctr, es2::idx_t _cap) noexcept {
-      grdchk1(this->es2_alctr == nullptr, "Allocator already exists!");
+      es2chk1(this->es2_alctr == nullptr, "Allocator already exists!");
       this->es2_alctr = _alctr;
       if (_cap) reserve((size_t)_cap);
     }
