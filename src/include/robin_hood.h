@@ -82,7 +82,7 @@ struct Counts {
     uint64_t shiftUp{};
     uint64_t shiftDown{};
 };
-ES2INL(FRC) std::ostream& operator<<(std::ostream& os, Counts const& c) {
+ES2INL(F) std::ostream& operator<<(std::ostream& os, Counts const& c) {
     return os << c.shiftUp << " shiftUp" << std::endl << c.shiftDown << " shiftDown" << std::endl;
 }
 
@@ -342,12 +342,12 @@ T rotr(T x, unsigned k) {
 // 'uint64_t*' {aka 'long unsigned int*'} increases required alignment of target type". Use with
 // care!
 template <typename T>
-ES2INL(FRC) T reinterpret_cast_no_cast_align_warning(void* ptr) noexcept {
+ES2INL(F) T reinterpret_cast_no_cast_align_warning(void* ptr) noexcept {
     return reinterpret_cast<T>(ptr);
 }
 
 template <typename T>
-ES2INL(FRC) T reinterpret_cast_no_cast_align_warning(void const* ptr) noexcept {
+ES2INL(F) T reinterpret_cast_no_cast_align_warning(void const* ptr) noexcept {
     return reinterpret_cast<T>(ptr);
 }
 
@@ -380,7 +380,7 @@ T* assertNotNull(T* t, Args&&... args) {
 }
 
 template <typename T>
-ES2INL(FRC) T unaligned_load(void const* ptr) noexcept {
+ES2INL(F) T unaligned_load(void const* ptr) noexcept {
     // using memcpy so we don't get into unaligned load problems.
     // compiler should optimize this very well anyways.
     T t;
@@ -703,39 +703,39 @@ struct pair {
 };
 
 template <typename A, typename B>
-ES2INL(FRC) void swap(pair<A, B>& a, pair<A, B>& b) noexcept(
+ES2INL(F) void swap(pair<A, B>& a, pair<A, B>& b) noexcept(
     noexcept(std::declval<pair<A, B>&>().swap(std::declval<pair<A, B>&>()))) {
     a.swap(b);
 }
 
 template <typename A, typename B>
-ES2INL(FRC) constexpr bool operator==(pair<A, B> const& x, pair<A, B> const& y) {
+ES2CXPR(FI) bool operator==(pair<A, B> const& x, pair<A, B> const& y) {
     return (x.first == y.first) && (x.second == y.second);
 }
 template <typename A, typename B>
-ES2INL(FRC) constexpr bool operator!=(pair<A, B> const& x, pair<A, B> const& y) {
+ES2CXPR(FI) bool operator!=(pair<A, B> const& x, pair<A, B> const& y) {
     return !(x == y);
 }
 template <typename A, typename B>
-ES2INL(FRC) constexpr bool operator<(pair<A, B> const& x, pair<A, B> const& y) noexcept(noexcept(
+ES2CXPR(FI) bool operator<(pair<A, B> const& x, pair<A, B> const& y) noexcept(noexcept(
     std::declval<A const&>() < std::declval<A const&>()) && noexcept(std::declval<B const&>() <
                                                                      std::declval<B const&>())) {
     return x.first < y.first || (!(y.first < x.first) && x.second < y.second);
 }
 template <typename A, typename B>
-ES2INL(FRC) constexpr bool operator>(pair<A, B> const& x, pair<A, B> const& y) {
+ES2CXPR(FI) bool operator>(pair<A, B> const& x, pair<A, B> const& y) {
     return y < x;
 }
 template <typename A, typename B>
-ES2INL(FRC) constexpr bool operator<=(pair<A, B> const& x, pair<A, B> const& y) {
+ES2CXPR(FI) bool operator<=(pair<A, B> const& x, pair<A, B> const& y) {
     return !(x > y);
 }
 template <typename A, typename B>
-ES2INL(FRC) constexpr bool operator>=(pair<A, B> const& x, pair<A, B> const& y) {
+ES2CXPR(FI) bool operator>=(pair<A, B> const& x, pair<A, B> const& y) {
     return !(x < y);
 }
 
-ES2INL(FRC) size_t hash_bytes(void const* ptr, size_t len) noexcept {
+ES2INL(F) size_t hash_bytes(void const* ptr, size_t len) noexcept {
     static constexpr uint64_t m = UINT64_C(0xc6a4a7935bd1e995);
     static constexpr uint64_t seed = UINT64_C(0xe17a1465);
     static constexpr unsigned int r = 47;
@@ -789,7 +789,7 @@ ES2INL(FRC) size_t hash_bytes(void const* ptr, size_t len) noexcept {
     return static_cast<size_t>(h);
 }
 
-ES2INL(FRC) size_t hash_int(uint64_t x) noexcept {
+ES2INL(F) size_t hash_int(uint64_t x) noexcept {
     // inspired by lemire's strongly universal hashing
     // https://lemire.me/blog/2018/08/15/fast-strongly-universal-64-bit-hashing-everywhere/
     //
@@ -1513,8 +1513,8 @@ public:
     using iterator = Iter<false>;
     using const_iterator = Iter<true>;
 
-    ES2INL(FRC) es2::Allocator_ifc* getAlctr() { return this->es2_alctr; }
-    ES2INL(FRC) void create(es2::Allocator_ifc* _alctr, es2::idx_t _cap) noexcept {
+    ES2INL(F) es2::Allocator_ifc* getAlctr() { return this->es2_alctr; }
+    ES2INL(F) void create(es2::Allocator_ifc* _alctr, es2::idx_t _cap) noexcept {
       grdchk1(this->es2_alctr == nullptr, "Allocator already exists!");
       this->es2_alctr = _alctr;
       if (_cap) reserve((size_t)_cap);
@@ -1852,12 +1852,12 @@ public:
         return 0;
     }
 
-    ROBIN_HOOD(NODISCARD) ES2INL(FRC) bool contains(const key_type& key) const {
+    ROBIN_HOOD(NODISCARD) ES2INL(F) bool contains(const key_type& key) const {
         return 1U == count(key);
     }
 
     template <typename OtherKey, typename Self_ = Self>
-    ROBIN_HOOD(NODISCARD) ES2INL(FRC) typename std::enable_if<Self_::is_transparent, bool>::type contains(const OtherKey& key) const {
+    ROBIN_HOOD(NODISCARD) ES2INL(F) typename std::enable_if<Self_::is_transparent, bool>::type contains(const OtherKey& key) const {
         return 1U == count(key);
     }
 
@@ -2421,7 +2421,7 @@ protected:
             auto const numBytesTotal = calcNumBytesTotal(numElementsWithBuffer);
             ROBINHOOD_FREE(mKeyVals,numBytesTotal);
         }
-        
+
         init();
     }
     private:
