@@ -394,24 +394,24 @@ template <typename T, size_t MinNumAllocs = 4, size_t MaxNumAllocs = 256>
 class BulkPoolAllocator {
 public:
     explicit BulkPoolAllocator(es2::Allocator_ifc* _alctr) noexcept
-        : es2_alctr(_alctr)
+        : m_alctr(_alctr)
         , mHead(nullptr)
         , mListForFree(nullptr) {}
 
     // does not copy anything, just creates a new allocator.
     BulkPoolAllocator(const BulkPoolAllocator& o) noexcept
-        : es2_alctr(o.es2_alctr)
+        : m_alctr(o.m_alctr)
         , mHead(nullptr)
         , mListForFree(nullptr) {
     }
 
     BulkPoolAllocator(BulkPoolAllocator&& o) noexcept
-        : es2_alctr(o.es2_alctr)
+        : m_alctr(o.m_alctr)
         , mHead(o.mHead)
         , mListForFree(o.mListForFree) {
         o.mListForFree = nullptr;
         o.mHead = nullptr;
-        o.es2_alctr = nullptr;
+        o.m_alctr = nullptr;
     }
 
     BulkPoolAllocator& operator=(BulkPoolAllocator&& o) noexcept {
@@ -420,7 +420,7 @@ public:
         mListForFree = o.mListForFree;
         o.mListForFree = nullptr;
         o.mHead = nullptr;
-        o.es2_alctr = nullptr;
+        o.m_alctr = nullptr;
         return *this;
     }
 
@@ -485,7 +485,7 @@ public:
 
     void swap(BulkPoolAllocator<T, MinNumAllocs, MaxNumAllocs>& other) noexcept {
         using std::swap;
-        swap(es2_alctr, other.es2_alctr);
+        swap(m_alctr, other.m_alctr);
         swap(mHead, other.mHead);
         swap(mListForFree, other.mListForFree);
     }
@@ -569,7 +569,7 @@ private:
     static_assert(0 == (ALIGNED_SIZE % sizeof(T*)), "ALIGNED_SIZE mod");
     static_assert(ALIGNMENT >= sizeof(T*), "ALIGNMENT");
   protected:
-    es2::Allocator_ifc* es2_alctr{nullptr};
+    es2::Allocator_ifc* m_alctr{nullptr};
     T* mHead{nullptr};
     T** mListForFree{nullptr};
 };
@@ -581,7 +581,7 @@ struct NodeAllocator;
 template <typename T, size_t MinSize, size_t MaxSize>
 struct NodeAllocator<T, MinSize, MaxSize, true> {
 
-    NodeAllocator(es2::Allocator_ifc* _alctr) noexcept : es2_alctr(_alctr) {}
+    NodeAllocator(es2::Allocator_ifc* _alctr) noexcept : m_alctr(_alctr) {}
 
     // we are not using the data, so just free it.
     void addOrFree(void* ptr, size_t numBytes) noexcept {
@@ -591,10 +591,10 @@ struct NodeAllocator<T, MinSize, MaxSize, true> {
 
     void swap(NodeAllocator& other) noexcept {
         using std::swap;
-        swap(es2_alctr, other.es2_alctr);
+        swap(m_alctr, other.m_alctr);
     }
 
-    es2::Allocator_ifc* es2_alctr = nullptr;
+    es2::Allocator_ifc* m_alctr = nullptr;
 };
 
 template <typename T, size_t MinSize, size_t MaxSize>
@@ -1516,8 +1516,8 @@ public:
     using const_iterator = Iter<true>;
 
     ES2INL(FI) void create(es2::Allocator_ifc* _alctr, es2::idx_t _cap) noexcept {
-      es2chk1(this->es2_alctr == nullptr, "Allocator already exists!");
-      this->es2_alctr = _alctr;
+      es2chk1(this->m_alctr == nullptr, "Allocator already exists!");
+      this->m_alctr = _alctr;
       if (_cap) reserve((size_t)_cap);
     }
     Table(es2::StrgNoInitTag_t) noexcept
