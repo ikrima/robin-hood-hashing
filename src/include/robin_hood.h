@@ -575,13 +575,13 @@ private:
 };
 
 template <typename T, size_t MinSize, size_t MaxSize, bool IsFlat>
-struct NodeAllocator;
+class NodeAllocator;
 
 // dummy allocator that does nothing
 template <typename T, size_t MinSize, size_t MaxSize>
-struct NodeAllocator<T, MinSize, MaxSize, true> {
-
-    NodeAllocator(es2::Allocator_ifc* _alctr) noexcept : m_alctr(_alctr) {}
+class NodeAllocator<T, MinSize, MaxSize, true> {
+protected:
+    explicit NodeAllocator(es2::Allocator_ifc* _alctr) noexcept : m_alctr(_alctr) {}
 
     // we are not using the data, so just free it.
     void addOrFree(void* ptr, size_t numBytes) noexcept {
@@ -589,16 +589,28 @@ struct NodeAllocator<T, MinSize, MaxSize, true> {
         ROBINHOOD_FREE(ptr, numBytes);
     }
 
-    void swap(NodeAllocator& other) noexcept {
-        using std::swap;
-        swap(m_alctr, other.m_alctr);
+    void _createFromMov(NodeAllocator& _b) noexcept {
+        this->m_alctr      = _b.m_alctr;
+        _b.m_alctr         = nullptr;
     }
 
     es2::Allocator_ifc* m_alctr = nullptr;
 };
 
 template <typename T, size_t MinSize, size_t MaxSize>
-struct NodeAllocator<T, MinSize, MaxSize, false> : public BulkPoolAllocator<T, MinSize, MaxSize> { using BulkPoolAllocator<T,MinSize,MaxSize>::BulkPoolAllocator; };
+class NodeAllocator<T, MinSize, MaxSize, false> : public BulkPoolAllocator<T, MinSize, MaxSize> {
+protected:
+  using BulkPoolAllocator<T,MinSize,MaxSize>::BulkPoolAllocator;
+
+  void _createFromMov(NodeAllocator& _b) noexcept {
+      this->m_alctr      = _b.m_alctr;
+      this->mHead        = _b.mHead;
+      this->mListForFree = _b.mListForFree;
+      _b.mListForFree    = nullptr;
+      _b.mHead           = nullptr;
+      _b.m_alctr         = nullptr;
+  }
+};
 
 // dummy hash, unsed as mixer when robin_hood::hash is already used
 template <typename T>
@@ -1515,45 +1527,15 @@ public:
     using iterator = Iter<false>;
     using const_iterator = Iter<true>;
 
-    ES2INL(FI) void create(es2::Allocator_ifc* _alctr, es2::idx_t _cap) noexcept {
-      es2chk1(this->m_alctr == nullptr, "Allocator already exists!");
-      this->m_alctr = _alctr;
-      if (_cap) reserve((size_t)_cap);
-    }
-    Table(es2::StrgNoInitTag_t) noexcept
-        : DataPool(nullptr) {
-        ROBIN_HOOD_TRACE(this)
-    }
-    Table(es2::idx_t _cap, es2::Allocator_ifc* _alctr) noexcept
-        : DataPool(nullptr) {
-        ROBIN_HOOD_TRACE(this)
-        create(_alctr, _cap);
-    }
-
+protected:
     // Creates an empty hash map. Nothing is allocated yet, this happens at the first insert.
     // This tremendously speeds up ctor & dtor of a map that never receives an element. The
     // penalty is payed at the first insert, and not before. Lookup of this empty map works
     // because everybody points to DummyInfoByte::b. parameter bucket_count is dictated by the
     // standard, but we can ignore it.
-    explicit Table(
-        es2::Allocator_ifc* _alctr,
-        size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/) noexcept
-        : DataPool(_alctr) {
+    Table(es2::StrgNoInitTag_t) noexcept
+        : DataPool(nullptr) {
         ROBIN_HOOD_TRACE(this)
-    }
-
-    template <typename Iter>
-    Table(es2::Allocator_ifc* _alctr, Iter first, Iter last, size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0)
-        : DataPool(_alctr) {
-        ROBIN_HOOD_TRACE(this)
-        insert(first, last);
-    }
-
-    Table(es2::Allocator_ifc* _alctr, std::initializer_list<value_type> initlist,
-          size_t ROBIN_HOOD_UNUSED(bucket_count) /*unused*/ = 0)
-        : DataPool(_alctr) {
-        ROBIN_HOOD_TRACE(this)
-        insert(initlist.begin(), initlist.end());
     }
 
     Table(Table&& o) noexcept
@@ -1687,6 +1669,7 @@ public:
         return *this;
     }
 
+public:
     // Swaps everything between the two maps.
     void swap(Table& o) {
         ROBIN_HOOD_TRACE(this)
