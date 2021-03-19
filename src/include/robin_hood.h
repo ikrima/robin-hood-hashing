@@ -568,9 +568,8 @@ private:
     static_assert(ALIGNED_SIZE >= sizeof(T*), "ALIGNED_SIZE");
     static_assert(0 == (ALIGNED_SIZE % sizeof(T*)), "ALIGNED_SIZE mod");
     static_assert(ALIGNMENT >= sizeof(T*), "ALIGNMENT");
-  public:
+  protected:
     es2::Allocator_ifc* es2_alctr{nullptr};
-  private:
     T* mHead{nullptr};
     T** mListForFree{nullptr};
 };
@@ -590,6 +589,10 @@ struct NodeAllocator<T, MinSize, MaxSize, true> {
         ROBINHOOD_FREE(ptr, numBytes);
     }
 
+    void swap(NodeAllocator& other) noexcept {
+        using std::swap;
+        swap(es2_alctr, other.es2_alctr);
+    }
 
     es2::Allocator_ifc* es2_alctr = nullptr;
 };
@@ -935,7 +938,7 @@ struct has_is_transparent<T, typename void_type<typename T::is_transparent>::typ
 // https://www.reddit.com/r/cpp/comments/ahp6iu/compile_time_binary_size_reductions_and_cs_future/eeguck4/
 template <bool IsFlat, typename Key, typename T, typename KeyInfoTy>
 class Table
-    : detail::NodeAllocator<
+    : public detail::NodeAllocator<
           typename std::conditional_t<
               std::is_void_v<T>, Key,
               robin_hood::pair<typename std::conditional_t<IsFlat, Key, Key const>, T>>,
@@ -1512,14 +1515,11 @@ public:
     using iterator = Iter<false>;
     using const_iterator = Iter<true>;
 
-    ES2INL(FI) es2::Allocator_ifc* getAlctr() { return this->es2_alctr; }
     ES2INL(FI) void create(es2::Allocator_ifc* _alctr, es2::idx_t _cap) noexcept {
       es2chk1(this->es2_alctr == nullptr, "Allocator already exists!");
       this->es2_alctr = _alctr;
       if (_cap) reserve((size_t)_cap);
     }
-
-
     Table(es2::StrgNoInitTag_t) noexcept
         : DataPool(nullptr) {
         ROBIN_HOOD_TRACE(this)
@@ -2400,7 +2400,7 @@ protected:
 
         rehashPowerOfTwo((mMask + 1) * 2, false);
     }
-    public:
+    protected:
     void destroy() {
         if (0 == mMask) {
             // don't deallocate!
@@ -2423,7 +2423,6 @@ protected:
 
         init();
     }
-    private:
     void init() noexcept {
         mKeyVals = reinterpret_cast_no_cast_align_warning<Node*>(&mMask);
         mInfo = reinterpret_cast<uint8_t*>(&mMask);
