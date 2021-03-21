@@ -38,7 +38,7 @@
 #define ROBIN_HOOD_VERSION_MINOR 10 // for adding functionality in a backwards-compatible manner
 #define ROBIN_HOOD_VERSION_PATCH 0  // for backwards-compatible bug fixes
 
-#include "es2core/subsys/es2memops.h"
+#include "es2core/core/es2memops.h"
 #include "es2core/debug/es2assertmacros.h"
 
 //#include <algorithm>
