@@ -44,12 +44,14 @@
 //#include <algorithm>
 //#include <cstdlib>
 //#include <cstring>
-#include <functional>
+//#include <functional>
 //#include <memory> // only to support hash of smart pointers
 //#include <stdexcept>
 //#include <string>
 #include <type_traits>
 #include <utility>
+#include <xutility>
+#include <tuple>
 #if __cplusplus >= 201703L
 //#    include <string_view>
 #endif
@@ -248,7 +250,7 @@ static Counts& counts() {
 #endif
 
 namespace robin_hood {
-
+struct std_bad_alloc{};
 #if ROBIN_HOOD(CXX) >= ROBIN_HOOD(CXX14)
 #    define ROBIN_HOOD_STD std
 #else
@@ -546,7 +548,7 @@ private:
         size_t const bytes = ALIGNMENT + ALIGNED_SIZE * numElementsToAlloc;
         ROBIN_HOOD_LOG("std::malloc " << bytes << " = " << ALIGNMENT << " + " << ALIGNED_SIZE
                                       << " * " << numElementsToAlloc)
-        add(assertNotNull<std::bad_alloc>(ROBINHOOD_MALLOC(bytes)), bytes);
+        add(assertNotNull<std_bad_alloc>(ROBINHOOD_MALLOC(bytes)), bytes);
         return mHead;
     }
 
@@ -1244,7 +1246,7 @@ protected:
     shiftUp(size_t startIdx,
             size_t const insertion_idx) noexcept(std::is_nothrow_move_assignable<Node>::value) {
         auto idx = startIdx;
-        ::new (static_cast<void*>(mKeyVals + idx)) Node(std::move(mKeyVals[idx - 1]));
+        ES2PLCNEW_EX(static_cast<void*>(mKeyVals + idx),Node)(std::move(mKeyVals[idx - 1]));
         while (--idx != insertion_idx) {
             mKeyVals[idx] = std::move(mKeyVals[idx - 1]);
         }
@@ -1345,7 +1347,7 @@ protected:
 
         auto& l = mKeyVals[insertion_idx];
         if (idx == insertion_idx) {
-            ::new (static_cast<void*>(&l)) Node(std::move(keyval));
+            ES2PLCNEW_EX(static_cast<void*>(&l),Node)(std::move(keyval));
         } else {
             shiftUp(idx, insertion_idx);
             l = std::move(keyval);
@@ -1429,7 +1431,7 @@ protected:
             ROBIN_HOOD_LOG("std::malloc " << numBytesTotal << " = calcNumBytesTotal("
                                           << numElementsWithBuffer << ")")
             mKeyVals = static_cast<Node*>(
-                detail::assertNotNull<std::bad_alloc>(ROBINHOOD_MALLOC(numBytesTotal)));
+                detail::assertNotNull<std_bad_alloc>(ROBINHOOD_MALLOC(numBytesTotal)));
             // no need for calloc because clonData does memcpy
             mInfo = reinterpret_cast<uint8_t*>(mKeyVals + numElementsWithBuffer);
             mNumElements = o.mNumElements;
@@ -1487,7 +1489,7 @@ protected:
             ROBIN_HOOD_LOG("std::malloc " << numBytesTotal << " = calcNumBytesTotal("
                                           << numElementsWithBuffer << ")")
             mKeyVals = static_cast<Node*>(
-                detail::assertNotNull<std::bad_alloc>(ROBINHOOD_MALLOC(numBytesTotal)));
+                detail::assertNotNull<std_bad_alloc>(ROBINHOOD_MALLOC(numBytesTotal)));
 
             // no need for calloc here because cloneData performs a memcpy.
             mInfo = reinterpret_cast<uint8_t*>(mKeyVals + numElementsWithBuffer);
@@ -2046,7 +2048,7 @@ protected:
         ROBIN_HOOD_LOG("std::calloc " << numBytesTotal << " = calcNumBytesTotal("
                                       << numElementsWithBuffer << ")")
         mKeyVals = reinterpret_cast<Node*>(
-            detail::assertNotNull<std::bad_alloc>(ROBINHOOD_CALLOC(1, numBytesTotal)));
+            detail::assertNotNull<std_bad_alloc>(ROBINHOOD_CALLOC(1, numBytesTotal)));
         mInfo = reinterpret_cast<uint8_t*>(mKeyVals + numElementsWithBuffer);
 
         // set sentinel
