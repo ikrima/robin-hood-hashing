@@ -383,7 +383,7 @@ ES2INL(FI) T unaligned_load(void const* ptr) noexcept {
     // using memcpy so we don't get into unaligned load problems.
     // compiler should optimize this very well anyways.
     T t;
-    std::memcpy(&t, ptr, sizeof(T));
+    ES2MEMCPY(&t, ptr, sizeof(T));
     return t;
 }
 
@@ -612,14 +612,6 @@ protected:
   }
 };
 
-// dummy hash, unsed as mixer when robin_hood::hash is already used
-template <typename T>
-struct identity_hash {
-    constexpr size_t operator()(T const& obj) const noexcept {
-        return static_cast<size_t>(obj);
-    }
-};
-
 // c++14 doesn't have is_nothrow_swappable, and clang++ 6.0.1 doesn't like it either, so I'm making
 // my own here.
 namespace swappable {
@@ -749,164 +741,7 @@ ES2CXPR(FI) bool operator>=(pair<A, B> const& x, pair<A, B> const& y) {
     return !(x < y);
 }
 
-ES2INL(FI) size_t hash_bytes(void const* ptr, size_t len) noexcept {
-    static constexpr uint64_t m = UINT64_C(0xc6a4a7935bd1e995);
-    static constexpr uint64_t seed = UINT64_C(0xe17a1465);
-    static constexpr unsigned int r = 47;
 
-    auto const* const data64 = static_cast<uint64_t const*>(ptr);
-    uint64_t h = seed ^ (len * m);
-
-    size_t const n_blocks = len / 8;
-    for (size_t i = 0; i < n_blocks; ++i) {
-        auto k = detail::unaligned_load<uint64_t>(data64 + i);
-
-        k *= m;
-        k ^= k >> r;
-        k *= m;
-
-        h ^= k;
-        h *= m;
-    }
-
-    auto const* const data8 = reinterpret_cast<uint8_t const*>(data64 + n_blocks);
-    switch (len & 7U) {
-    case 7:
-        h ^= static_cast<uint64_t>(data8[6]) << 48U;
-        ROBIN_HOOD(FALLTHROUGH); // FALLTHROUGH
-    case 6:
-        h ^= static_cast<uint64_t>(data8[5]) << 40U;
-        ROBIN_HOOD(FALLTHROUGH); // FALLTHROUGH
-    case 5:
-        h ^= static_cast<uint64_t>(data8[4]) << 32U;
-        ROBIN_HOOD(FALLTHROUGH); // FALLTHROUGH
-    case 4:
-        h ^= static_cast<uint64_t>(data8[3]) << 24U;
-        ROBIN_HOOD(FALLTHROUGH); // FALLTHROUGH
-    case 3:
-        h ^= static_cast<uint64_t>(data8[2]) << 16U;
-        ROBIN_HOOD(FALLTHROUGH); // FALLTHROUGH
-    case 2:
-        h ^= static_cast<uint64_t>(data8[1]) << 8U;
-        ROBIN_HOOD(FALLTHROUGH); // FALLTHROUGH
-    case 1:
-        h ^= static_cast<uint64_t>(data8[0]);
-        h *= m;
-        ROBIN_HOOD(FALLTHROUGH); // FALLTHROUGH
-    default:
-        break;
-    }
-
-    h ^= h >> r;
-    h *= m;
-    h ^= h >> r;
-    return static_cast<size_t>(h);
-}
-
-ES2INL(FI) size_t hash_int(uint64_t x) noexcept {
-    // inspired by lemire's strongly universal hashing
-    // https://lemire.me/blog/2018/08/15/fast-strongly-universal-64-bit-hashing-everywhere/
-    //
-    // Instead of shifts, we use rotations so we don't lose any bits.
-    //
-    // Added a final multiplcation with a constant for more mixing. It is most important that
-    // the lower bits are well mixed.
-    auto h1 = x * UINT64_C(0xA24BAED4963EE407);
-    auto h2 = detail::rotr(x, 32U) * UINT64_C(0x9FB21C651E98DF25);
-    auto h = detail::rotr(h1 + h2, 32U);
-    return static_cast<size_t>(h);
-}
-
-// A thin wrapper around std::hash, performing an additional simple mixing step of the result.
-template <typename T, typename Enable = void>
-struct hash : public std::hash<T> {
-    size_t operator()(T const& obj) const
-        noexcept(noexcept(std::declval<std::hash<T>>().operator()(std::declval<T const&>()))) {
-        // call base hash
-        auto result = std::hash<T>::operator()(obj);
-        // return mixed of that, to be save against identity has
-        return hash_int(static_cast<detail::SizeT>(result));
-    }
-};
-
-template <typename CharT>
-struct hash<std::basic_string<CharT>> {
-    size_t operator()(std::basic_string<CharT> const& str) const noexcept {
-        return hash_bytes(str.data(), sizeof(CharT) * str.size());
-    }
-};
-
-#if ROBIN_HOOD(CXX) >= ROBIN_HOOD(CXX17)
-template <typename CharT>
-struct hash<std::basic_string_view<CharT>> {
-    size_t operator()(std::basic_string_view<CharT> const& sv) const noexcept {
-        return hash_bytes(sv.data(), sizeof(CharT) * sv.size());
-    }
-};
-#endif
-
-template <class T>
-struct hash<T*> {
-    size_t operator()(T* ptr) const noexcept {
-        return hash_int(reinterpret_cast<detail::SizeT>(ptr));
-    }
-};
-
-template <class T>
-struct hash<std::unique_ptr<T>> {
-    size_t operator()(std::unique_ptr<T> const& ptr) const noexcept {
-        return hash_int(reinterpret_cast<detail::SizeT>(ptr.get()));
-    }
-};
-
-template <class T>
-struct hash<std::shared_ptr<T>> {
-    size_t operator()(std::shared_ptr<T> const& ptr) const noexcept {
-        return hash_int(reinterpret_cast<detail::SizeT>(ptr.get()));
-    }
-};
-
-template <typename Enum>
-struct hash<Enum, typename std::enable_if<std::is_enum<Enum>::value>::type> {
-    size_t operator()(Enum e) const noexcept {
-        using Underlying = typename std::underlying_type<Enum>::type;
-        return hash<Underlying>{}(static_cast<Underlying>(e));
-    }
-};
-
-#define ROBIN_HOOD_HASH_INT(T)                           \
-    template <>                                          \
-    struct hash<T> {                                     \
-        size_t operator()(T const& obj) const noexcept { \
-            return hash_int(static_cast<uint64_t>(obj)); \
-        }                                                \
-    }
-
-#if defined(__GNUC__) && !defined(__clang__)
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wuseless-cast"
-#endif
-// see https://en.cppreference.com/w/cpp/utility/hash
-ROBIN_HOOD_HASH_INT(bool);
-ROBIN_HOOD_HASH_INT(char);
-ROBIN_HOOD_HASH_INT(signed char);
-ROBIN_HOOD_HASH_INT(unsigned char);
-ROBIN_HOOD_HASH_INT(char16_t);
-ROBIN_HOOD_HASH_INT(char32_t);
-#if ROBIN_HOOD(HAS_NATIVE_WCHART)
-ROBIN_HOOD_HASH_INT(wchar_t);
-#endif
-ROBIN_HOOD_HASH_INT(short);
-ROBIN_HOOD_HASH_INT(unsigned short);
-ROBIN_HOOD_HASH_INT(int);
-ROBIN_HOOD_HASH_INT(unsigned int);
-ROBIN_HOOD_HASH_INT(long);
-ROBIN_HOOD_HASH_INT(long long);
-ROBIN_HOOD_HASH_INT(unsigned long);
-ROBIN_HOOD_HASH_INT(unsigned long long);
-#if defined(__GNUC__) && !defined(__clang__)
-#    pragma GCC diagnostic pop
-#endif
 namespace detail {
 
 template <typename T>
@@ -2057,7 +1892,7 @@ public:
     }
 
     ROBIN_HOOD(NODISCARD) size_t calcMaxNumElementsAllowed(size_t maxElements) const noexcept {
-        if (ROBIN_HOOD_LIKELY(maxElements <= (std::numeric_limits<size_t>::max)() / 100)) {
+        if (ROBIN_HOOD_LIKELY(maxElements <= UINT64_MAX / 100ULL)) {
             return maxElements * MaxLoadFactor100 / 100;
         }
 
@@ -2351,7 +2186,7 @@ protected:
         for (size_t i = 0; i < numElementsWithBuffer; i += 8) {
             auto val = unaligned_load<uint64_t>(mInfo + i);
             val = (val >> 1U) & UINT64_C(0x7f7f7f7f7f7f7f7f);
-            std::memcpy(mInfo + i, &val, sizeof(val));
+            ES2MEMCPY(mInfo + i, &val, sizeof(val));
         }
         // update sentinel, which might have been cleared out!
         mInfo[numElementsWithBuffer] = 1;
