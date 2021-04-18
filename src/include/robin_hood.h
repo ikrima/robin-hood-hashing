@@ -2269,13 +2269,13 @@ protected:
 
 // map
 
-template <typename Key, typename T, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
+template <typename Key, typename T, typename KeyInfoTy>
 using unordered_flat_map = detail::Table<true, Key, T, KeyInfoTy>;
 
-template <typename Key, typename T, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
+template <typename Key, typename T, typename KeyInfoTy>
 using unordered_node_map = detail::Table<false, Key, T, KeyInfoTy>;
 
-template <typename Key, typename T, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
+template <typename Key, typename T, typename KeyInfoTy>
 using unordered_map =
     detail::Table<sizeof(robin_hood::pair<Key, T>) <= sizeof(size_t) * 6 &&
                       std::is_nothrow_move_constructible<robin_hood::pair<Key, T>>::value &&
@@ -2284,13 +2284,13 @@ using unordered_map =
 
 // set
 
-template <typename Key, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
+template <typename Key, typename KeyInfoTy>
 using unordered_flat_set = detail::Table<true, Key, void, KeyInfoTy>;
 
-template <typename Key, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
+template <typename Key, typename KeyInfoTy>
 using unordered_node_set = detail::Table<false, Key, void, KeyInfoTy>;
 
-template <typename Key, typename KeyInfoTy = ::es2::MapKeyInfo<Key>>
+template <typename Key, typename KeyInfoTy>
 using unordered_set = detail::Table<sizeof(Key) <= sizeof(size_t) * 6 &&
                                         std::is_nothrow_move_constructible<Key>::value &&
                                         std::is_nothrow_move_assignable<Key>::value,
