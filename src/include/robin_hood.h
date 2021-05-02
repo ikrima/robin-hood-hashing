@@ -582,7 +582,9 @@ class NodeAllocator;
 // dummy allocator that does nothing
 template <typename T, size_t MinSize, size_t MaxSize>
 class NodeAllocator<T, MinSize, MaxSize, true> {
-protected:
+public:
+    es2::Allocator_ifc* m_alctr = nullptr;
+
     explicit NodeAllocator(es2::Allocator_ifc* _alctr) noexcept : m_alctr(_alctr) {}
 
     // we are not using the data, so just free it.
@@ -590,29 +592,29 @@ protected:
         ROBIN_HOOD_LOG("std::free")
         ROBINHOOD_FREE(ptr, numBytes);
     }
-
-    void _createFromMov(NodeAllocator& _b) noexcept {
-        this->m_alctr      = _b.m_alctr;
-        _b.m_alctr         = nullptr;
-    }
-
-    es2::Allocator_ifc* m_alctr = nullptr;
 };
-
 template <typename T, size_t MinSize, size_t MaxSize>
 class NodeAllocator<T, MinSize, MaxSize, false> : public BulkPoolAllocator<T, MinSize, MaxSize> {
-protected:
+public:
   using BulkPoolAllocator<T,MinSize,MaxSize>::BulkPoolAllocator;
-
-  void _createFromMov(NodeAllocator& _b) noexcept {
-      this->m_alctr      = _b.m_alctr;
-      this->mHead        = _b.mHead;
-      this->mListForFree = _b.mListForFree;
-      _b.mListForFree    = nullptr;
-      _b.mHead           = nullptr;
-      _b.m_alctr         = nullptr;
-  }
 };
+
+
+template <class T, size_t MinSize, size_t MaxSize>
+ES2CXPR(FI) void _createFromMov(es2::TypeTag_t<NodeAllocator<T,MinSize,MaxSize,true>>, NodeAllocator<T,MinSize,MaxSize,true>& _dst, NodeAllocator<T,MinSize,MaxSize,true>&& _src) noexcept {
+  _dst.m_alctr = es2::exchange(_src.m_alctr, nullptr);
+}
+template <class T, size_t MinSize, size_t MaxSize>
+ES2CXPR(FI) void _createFromMov(es2::TypeTag_t<NodeAllocator<T,MinSize,MaxSize,false>>,  NodeAllocator<T,MinSize,MaxSize,false>& _dst, NodeAllocator<T,MinSize,MaxSize,false>&& _src) noexcept {
+  _dst.m_alctr      = es2::exchange(_src.m_alctr,      nullptr);
+  _dst.mHead        = es2::exchange(_src.mHead,        nullptr);
+  _dst.mListForFree = es2::exchange(_src.mListForFree, nullptr);
+}
+
+template <class T, size_t MinSize, size_t MaxSize, bool IsFlat>
+ES2CXPR(FI) void _createFromMov(NodeAllocator<T,MinSize,MaxSize,IsFlat>& _dst, NodeAllocator<T,MinSize,MaxSize,IsFlat>&& _src) noexcept {
+  _createFromMov(es2::type_tag<NodeAllocator<T,MinSize,MaxSize,IsFlat>>, _dst, es2::es2move(_src));
+}
 
 // c++14 doesn't have is_nothrow_swappable, and clang++ 6.0.1 doesn't like it either, so I'm making
 // my own here.
