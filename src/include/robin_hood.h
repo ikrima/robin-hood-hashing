@@ -1372,7 +1372,7 @@ protected:
     // penalty is payed at the first insert, and not before. Lookup of this empty map works
     // because everybody points to DummyInfoByte::b. parameter bucket_count is dictated by the
     // standard, but we can ignore it.
-    Table(es2::StrgNoInitTag_t) noexcept
+    Table(es2::NoInitTag_t) noexcept
         : DataPool(nullptr) {
         ROBIN_HOOD_TRACE(this)
     }
