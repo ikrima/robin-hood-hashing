@@ -395,7 +395,7 @@ ES2INL(FI) T unaligned_load(void const* ptr) noexcept {
 template <typename T, size_t MinNumAllocs = 4, size_t MaxNumAllocs = 256>
 class BulkPoolAllocator {
 public:
-    explicit BulkPoolAllocator(es2::Allocator_ifc* _alctr) noexcept
+    explicit BulkPoolAllocator(es2::Alloc_ifc* _alctr) noexcept
         : m_alctr(_alctr)
         , mHead(nullptr)
         , mListForFree(nullptr) {}
@@ -571,7 +571,7 @@ private:
     static_assert(0 == (ALIGNED_SIZE % sizeof(T*)), "ALIGNED_SIZE mod");
     static_assert(ALIGNMENT >= sizeof(T*), "ALIGNMENT");
   protected:
-    es2::Allocator_ifc* m_alctr{nullptr};
+    es2::Alloc_ifc* m_alctr{nullptr};
     T* mHead{nullptr};
     T** mListForFree{nullptr};
 };
@@ -583,9 +583,9 @@ class NodeAllocator;
 template <typename T, size_t MinSize, size_t MaxSize>
 class NodeAllocator<T, MinSize, MaxSize, true> {
 public:
-    es2::Allocator_ifc* m_alctr = nullptr;
+    es2::Alloc_ifc* m_alctr = nullptr;
 
-    explicit NodeAllocator(es2::Allocator_ifc* _alctr) noexcept : m_alctr(_alctr) {}
+    explicit NodeAllocator(es2::Alloc_ifc* _alctr) noexcept : m_alctr(_alctr) {}
 
     // we are not using the data, so just free it.
     void addOrFree(void* ptr, size_t numBytes) noexcept {
