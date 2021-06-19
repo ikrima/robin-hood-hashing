@@ -38,8 +38,9 @@
 #define ROBIN_HOOD_VERSION_MINOR 10 // for adding functionality in a backwards-compatible manner
 #define ROBIN_HOOD_VERSION_PATCH 0  // for backwards-compatible bug fixes
 
-#include "es2core/core/es2memory.h"
-#include "es2core/debug/es2assertmacros.h"
+#ifdef ROBINHOOD_USER_CONFIG
+#   include ROBINHOOD_USER_CONFIG
+#endif
 
 //#include <algorithm>
 //#include <cstdlib>
