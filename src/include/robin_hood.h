@@ -396,25 +396,25 @@ ES2(FI) T unaligned_load(void const* ptr) noexcept {
 template <typename T, size_t MinNumAllocs = 4, size_t MaxNumAllocs = 256>
 class BulkPoolAllocator {
 public:
-    explicit BulkPoolAllocator(es2::Alloc_ifc* _alctr) noexcept
-        : m_alctr(_alctr)
+    explicit BulkPoolAllocator(es2::Alloc_ifc _ifcAlc) noexcept
+        : m_ifcAlc(_ifcAlc)
         , mHead(nullptr)
         , mListForFree(nullptr) {}
 
     // does not copy anything, just creates a new allocator.
     BulkPoolAllocator(const BulkPoolAllocator& o) noexcept
-        : m_alctr(o.m_alctr)
+        : m_ifcAlc(o.m_ifcAlc)
         , mHead(nullptr)
         , mListForFree(nullptr) {
     }
 
     BulkPoolAllocator(BulkPoolAllocator&& o) noexcept
-        : m_alctr(o.m_alctr)
+        : m_ifcAlc(o.m_ifcAlc)
         , mHead(o.mHead)
         , mListForFree(o.mListForFree) {
         o.mListForFree = nullptr;
         o.mHead = nullptr;
-        o.m_alctr = nullptr;
+        o.m_ifcAlc = es2::magic::NullAllocator;
     }
 
     BulkPoolAllocator& operator=(BulkPoolAllocator&& o) noexcept {
@@ -423,7 +423,7 @@ public:
         mListForFree = o.mListForFree;
         o.mListForFree = nullptr;
         o.mHead = nullptr;
-        o.m_alctr = nullptr;
+        o.m_ifcAlc = nullptr;
         return *this;
     }
 
@@ -488,7 +488,7 @@ public:
 
     void swap(BulkPoolAllocator<T, MinNumAllocs, MaxNumAllocs>& other) noexcept {
         using std::swap;
-        swap(m_alctr, other.m_alctr);
+        swap(m_ifcAlc, other.m_ifcAlc);
         swap(mHead, other.mHead);
         swap(mListForFree, other.mListForFree);
     }
@@ -572,7 +572,7 @@ private:
     static_assert(0 == (ALIGNED_SIZE % sizeof(T*)), "ALIGNED_SIZE mod");
     static_assert(ALIGNMENT >= sizeof(T*), "ALIGNMENT");
   protected:
-    es2::Alloc_ifc* m_alctr{nullptr};
+    es2::Alloc_ifc m_ifcAlc;
     T* mHead{nullptr};
     T** mListForFree{nullptr};
 };
@@ -584,9 +584,9 @@ class NodeAllocator;
 template <typename T, size_t MinSize, size_t MaxSize>
 class NodeAllocator<T, MinSize, MaxSize, true> {
 public:
-    es2::Alloc_ifc* m_alctr = nullptr;
+    es2::Alloc_ifc m_ifcAlc;
 
-    explicit NodeAllocator(es2::Alloc_ifc* _alctr) noexcept : m_alctr(_alctr) {}
+    explicit NodeAllocator(es2::Alloc_ifc _ifcAlc) noexcept : m_ifcAlc(_ifcAlc) {}
 
     // we are not using the data, so just free it.
     void addOrFree(void* ptr, size_t numBytes) noexcept {
@@ -603,11 +603,11 @@ public:
 
 template <class T, size_t MinSize, size_t MaxSize>
 ES2(FI,CXPR) void _createFromMov(es2::TypeTag_t<NodeAllocator<T,MinSize,MaxSize,true>>, NodeAllocator<T,MinSize,MaxSize,true>& _dst, NodeAllocator<T,MinSize,MaxSize,true>&& _src) noexcept {
-  _dst.m_alctr = es2::exchange(_src.m_alctr, nullptr);
+  _dst.m_ifcAlc = es2::exchange(_src.m_ifcAlc, es2::magic::NullAllocator);
 }
 template <class T, size_t MinSize, size_t MaxSize>
 ES2(FI,CXPR) void _createFromMov(es2::TypeTag_t<NodeAllocator<T,MinSize,MaxSize,false>>,  NodeAllocator<T,MinSize,MaxSize,false>& _dst, NodeAllocator<T,MinSize,MaxSize,false>&& _src) noexcept {
-  _dst.m_alctr      = es2::exchange(_src.m_alctr,      nullptr);
+  _dst.m_ifcAlc      = es2::exchange(_src.m_ifcAlc,      es2::magic::NullAllocator);
   _dst.mHead        = es2::exchange(_src.mHead,        nullptr);
   _dst.mListForFree = es2::exchange(_src.mListForFree, nullptr);
 }
@@ -1374,7 +1374,7 @@ protected:
     // because everybody points to DummyInfoByte::b. parameter bucket_count is dictated by the
     // standard, but we can ignore it.
     Table(es2::EmptyInitTag) noexcept
-        : DataPool(nullptr) {
+        : DataPool(es2::magic::NullAllocator) {
         ROBIN_HOOD_TRACE(this)
     }
 
