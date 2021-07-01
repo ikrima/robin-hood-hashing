@@ -386,7 +386,7 @@ ES2(FI) T unaligned_load(void const* ptr) noexcept {
     // using memcpy so we don't get into unaligned load problems.
     // compiler should optimize this very well anyways.
     T t;
-    ES2MEMCPY(&t, ptr, sizeof(T));
+    es2MemCpy(&t, ptr, sizeof(T));
     return t;
 }
 
@@ -2191,7 +2191,7 @@ protected:
         for (size_t i = 0; i < numElementsWithBuffer; i += 8) {
             auto val = unaligned_load<uint64_t>(mInfo + i);
             val = (val >> 1U) & UINT64_C(0x7f7f7f7f7f7f7f7f);
-            ES2MEMCPY(mInfo + i, &val, sizeof(val));
+            es2MemCpy(mInfo + i, &val, sizeof(val));
         }
         // update sentinel, which might have been cleared out!
         mInfo[numElementsWithBuffer] = 1;
