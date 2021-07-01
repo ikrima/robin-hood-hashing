@@ -84,7 +84,7 @@ struct Counts {
     uint64_t shiftUp{};
     uint64_t shiftDown{};
 };
-ES2INL(FI) std::ostream& operator<<(std::ostream& os, Counts const& c) {
+ES2(FI) std::ostream& operator<<(std::ostream& os, Counts const& c) {
     return os << c.shiftUp << " shiftUp" << std::endl << c.shiftDown << " shiftDown" << std::endl;
 }
 
@@ -344,12 +344,12 @@ T rotr(T x, unsigned k) {
 // 'uint64_t*' {aka 'long unsigned int*'} increases required alignment of target type". Use with
 // care!
 template <typename T>
-ES2INL(FI) T reinterpret_cast_no_cast_align_warning(void* ptr) noexcept {
+ES2(FI) T reinterpret_cast_no_cast_align_warning(void* ptr) noexcept {
     return reinterpret_cast<T>(ptr);
 }
 
 template <typename T>
-ES2INL(FI) T reinterpret_cast_no_cast_align_warning(void const* ptr) noexcept {
+ES2(FI) T reinterpret_cast_no_cast_align_warning(void const* ptr) noexcept {
     return reinterpret_cast<T>(ptr);
 }
 
@@ -382,7 +382,7 @@ T* assertNotNull(T* t, Args&&... args) {
 }
 
 template <typename T>
-ES2INL(FI) T unaligned_load(void const* ptr) noexcept {
+ES2(FI) T unaligned_load(void const* ptr) noexcept {
     // using memcpy so we don't get into unaligned load problems.
     // compiler should optimize this very well anyways.
     T t;
@@ -602,18 +602,18 @@ public:
 
 
 template <class T, size_t MinSize, size_t MaxSize>
-ES2CXPR(FI) void _createFromMov(es2::TypeTag_t<NodeAllocator<T,MinSize,MaxSize,true>>, NodeAllocator<T,MinSize,MaxSize,true>& _dst, NodeAllocator<T,MinSize,MaxSize,true>&& _src) noexcept {
+ES2(FI,CXPR) void _createFromMov(es2::TypeTag_t<NodeAllocator<T,MinSize,MaxSize,true>>, NodeAllocator<T,MinSize,MaxSize,true>& _dst, NodeAllocator<T,MinSize,MaxSize,true>&& _src) noexcept {
   _dst.m_alctr = es2::exchange(_src.m_alctr, nullptr);
 }
 template <class T, size_t MinSize, size_t MaxSize>
-ES2CXPR(FI) void _createFromMov(es2::TypeTag_t<NodeAllocator<T,MinSize,MaxSize,false>>,  NodeAllocator<T,MinSize,MaxSize,false>& _dst, NodeAllocator<T,MinSize,MaxSize,false>&& _src) noexcept {
+ES2(FI,CXPR) void _createFromMov(es2::TypeTag_t<NodeAllocator<T,MinSize,MaxSize,false>>,  NodeAllocator<T,MinSize,MaxSize,false>& _dst, NodeAllocator<T,MinSize,MaxSize,false>&& _src) noexcept {
   _dst.m_alctr      = es2::exchange(_src.m_alctr,      nullptr);
   _dst.mHead        = es2::exchange(_src.mHead,        nullptr);
   _dst.mListForFree = es2::exchange(_src.mListForFree, nullptr);
 }
 
 template <class T, size_t MinSize, size_t MaxSize, bool IsFlat>
-ES2CXPR(FI) void _createFromMov(NodeAllocator<T,MinSize,MaxSize,IsFlat>& _dst, NodeAllocator<T,MinSize,MaxSize,IsFlat>&& _src) noexcept {
+ES2(FI,CXPR) void _createFromMov(NodeAllocator<T,MinSize,MaxSize,IsFlat>& _dst, NodeAllocator<T,MinSize,MaxSize,IsFlat>&& _src) noexcept {
   _createFromMov(es2::type_tag<NodeAllocator<T,MinSize,MaxSize,IsFlat>>, _dst, es2::es2move(_src));
 }
 
@@ -714,35 +714,35 @@ struct pair {
 };
 
 template <typename A, typename B>
-ES2INL(FI) void swap(pair<A, B>& a, pair<A, B>& b) noexcept(
+ES2(FI) void swap(pair<A, B>& a, pair<A, B>& b) noexcept(
     noexcept(std::declval<pair<A, B>&>().swap(std::declval<pair<A, B>&>()))) {
     a.swap(b);
 }
 
 template <typename A, typename B>
-ES2CXPR(FI) bool operator==(pair<A, B> const& x, pair<A, B> const& y) {
+ES2(FI,CXPR) bool operator==(pair<A, B> const& x, pair<A, B> const& y) {
     return (x.first == y.first) && (x.second == y.second);
 }
 template <typename A, typename B>
-ES2CXPR(FI) bool operator!=(pair<A, B> const& x, pair<A, B> const& y) {
+ES2(FI,CXPR) bool operator!=(pair<A, B> const& x, pair<A, B> const& y) {
     return !(x == y);
 }
 template <typename A, typename B>
-ES2CXPR(FI) bool operator<(pair<A, B> const& x, pair<A, B> const& y) noexcept(noexcept(
+ES2(FI,CXPR) bool operator<(pair<A, B> const& x, pair<A, B> const& y) noexcept(noexcept(
     std::declval<A const&>() < std::declval<A const&>()) && noexcept(std::declval<B const&>() <
                                                                      std::declval<B const&>())) {
     return x.first < y.first || (!(y.first < x.first) && x.second < y.second);
 }
 template <typename A, typename B>
-ES2CXPR(FI) bool operator>(pair<A, B> const& x, pair<A, B> const& y) {
+ES2(FI,CXPR) bool operator>(pair<A, B> const& x, pair<A, B> const& y) {
     return y < x;
 }
 template <typename A, typename B>
-ES2CXPR(FI) bool operator<=(pair<A, B> const& x, pair<A, B> const& y) {
+ES2(FI,CXPR) bool operator<=(pair<A, B> const& x, pair<A, B> const& y) {
     return !(x > y);
 }
 template <typename A, typename B>
-ES2CXPR(FI) bool operator>=(pair<A, B> const& x, pair<A, B> const& y) {
+ES2(FI,CXPR) bool operator>=(pair<A, B> const& x, pair<A, B> const& y) {
     return !(x < y);
 }
 
@@ -1674,12 +1674,12 @@ public:
         return 0;
     }
 
-    ROBIN_HOOD(NODISCARD) ES2INL(FI) bool contains(const key_type& key) const {
+    ROBIN_HOOD(NODISCARD) ES2(FI) bool contains(const key_type& key) const {
         return 1U == count(key);
     }
 
     template <typename OtherKey, typename Self_ = Self>
-    ROBIN_HOOD(NODISCARD) ES2INL(FI) typename std::enable_if<Self_::is_transparent, bool>::type contains(const OtherKey& key) const {
+    ROBIN_HOOD(NODISCARD) ES2(FI) typename std::enable_if<Self_::is_transparent, bool>::type contains(const OtherKey& key) const {
         return 1U == count(key);
     }
 
