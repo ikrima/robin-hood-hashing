@@ -154,22 +154,11 @@ static Counts& counts() {
 #endif
 // count leading/trailing bits
 #if !defined(ROBIN_HOOD_DISABLE_INTRINSICS)
-#    if ((defined __i386 || defined __x86_64__) && defined __BMI__) || defined _M_IX86 || defined _M_X64
-#        ifdef _MSC_VER
-#            include <intrin.h>
-#        else
-#            include <x86intrin.h>
-#        endif
-#        if ROBIN_HOOD(BITNESS) == 32
-#            define ROBIN_HOOD_PRIVATE_DEFINITION_CTZ() _tzcnt_u32
-#        else
-#            define ROBIN_HOOD_PRIVATE_DEFINITION_CTZ() _tzcnt_u64
-#        endif
-#        if defined __AVX2__ || defined __BMI__
-#            define ROBIN_HOOD_COUNT_TRAILING_ZEROES(x) ROBIN_HOOD(CTZ)(x)
-#        else
-#            define ROBIN_HOOD_COUNT_TRAILING_ZEROES(x) ROBIN_HOOD(CTZ)(x)
-#        endif
+#    ifdef ROBINHOOD_USER_CONFIG
+#        define ROBIN_HOOD_PRIVATE_DEFINITION_CTZ() ES2_INTRSC_CTZLL
+#        define ROBIN_HOOD_PRIVATE_DEFINITION_CLZ() ES2_INTRSC_CLZLL
+#        define ROBIN_HOOD_COUNT_LEADING_ZEROES(x) ((x) ? ROBIN_HOOD(CLZ)(x) : ROBIN_HOOD(BITNESS))
+#        define ROBIN_HOOD_COUNT_TRAILING_ZEROES(x) ((x) ? ROBIN_HOOD(CTZ)(x) : ROBIN_HOOD(BITNESS))
 #    elif  _MSC_VER
 #        if ROBIN_HOOD(BITNESS) == 32
 #            define ROBIN_HOOD_PRIVATE_DEFINITION_BITSCANFORWARD() _BitScanForward
@@ -600,22 +589,6 @@ public:
   using BulkPoolAllocator<T,MinSize,MaxSize>::BulkPoolAllocator;
 };
 
-
-template <class T, size_t MinSize, size_t MaxSize>
-ES2(FI,CXPR) void _createFromMov(es2::TypeTag<NodeAllocator<T,MinSize,MaxSize,true>>, NodeAllocator<T,MinSize,MaxSize,true>& _dst, NodeAllocator<T,MinSize,MaxSize,true>&& _src) noexcept {
-  _dst.m_ifcAlc = es2::exchange(_src.m_ifcAlc, es2::magic::NullAllocator);
-}
-template <class T, size_t MinSize, size_t MaxSize>
-ES2(FI,CXPR) void _createFromMov(es2::TypeTag<NodeAllocator<T,MinSize,MaxSize,false>>,  NodeAllocator<T,MinSize,MaxSize,false>& _dst, NodeAllocator<T,MinSize,MaxSize,false>&& _src) noexcept {
-  _dst.m_ifcAlc      = es2::exchange(_src.m_ifcAlc,      es2::magic::NullAllocator);
-  _dst.mHead        = es2::exchange(_src.mHead,        nullptr);
-  _dst.mListForFree = es2::exchange(_src.mListForFree, nullptr);
-}
-
-template <class T, size_t MinSize, size_t MaxSize, bool IsFlat>
-ES2(FI,CXPR) void _createFromMov(NodeAllocator<T,MinSize,MaxSize,IsFlat>& _dst, NodeAllocator<T,MinSize,MaxSize,IsFlat>&& _src) noexcept {
-  _createFromMov(es2::type_tag<NodeAllocator<T,MinSize,MaxSize,IsFlat>>, _dst, es2::es2move(_src));
-}
 
 // c++14 doesn't have is_nothrow_swappable, and clang++ 6.0.1 doesn't like it either, so I'm making
 // my own here.
