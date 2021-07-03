@@ -10,7 +10,7 @@
 //
 // Licensed under the MIT License <http://opensource.org/licenses/MIT>.
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2020 Martin Ankerl <http://martin.ankerl.com>
+// Copyright (c) 2018-2021 Martin Ankerl <http://martin.ankerl.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +35,7 @@
 
 // see https://semver.org/
 #define ROBIN_HOOD_VERSION_MAJOR 3  // for incompatible API changes
-#define ROBIN_HOOD_VERSION_MINOR 10 // for adding functionality in a backwards-compatible manner
+#define ROBIN_HOOD_VERSION_MINOR 11 // for adding functionality in a backwards-compatible manner
 #define ROBIN_HOOD_VERSION_PATCH 0  // for backwards-compatible bug fixes
 
 #ifdef ROBINHOOD_USER_CONFIG
@@ -51,8 +51,8 @@
 //#include <string>
 #include <type_traits>
 #include <utility>
-#include <xutility>
 #include <tuple>
+
 #if __cplusplus >= 201703L
 //#    include <string_view>
 #endif
@@ -216,6 +216,17 @@ static Counts& counts() {
 #    endif
 #else
 #    define ROBIN_HOOD_PRIVATE_DEFINITION_HAS_NATIVE_WCHART() 1
+#endif
+
+// detect if MSVC supports the pair(std::piecewise_construct_t,...) consructor being constexpr
+#ifdef _MSC_VER
+#    if _MSC_VER <= 1900
+#        define ROBIN_HOOD_PRIVATE_DEFINITION_BROKEN_CONSTEXPR() 1
+#    else
+#        define ROBIN_HOOD_PRIVATE_DEFINITION_BROKEN_CONSTEXPR() 0
+#    endif
+#else
+#    define ROBIN_HOOD_PRIVATE_DEFINITION_BROKEN_CONSTEXPR() 0
 #endif
 
 // workaround missing "is_trivially_copyable" in g++ < 5.0
@@ -650,14 +661,20 @@ struct pair {
         , second(std::forward<U2>(b)) {}
 
     template <typename... U1, typename... U2>
-    constexpr pair(
-        std::piecewise_construct_t /*unused*/, std::tuple<U1...> a,
-        std::tuple<U2...> b) noexcept(noexcept(pair(std::declval<std::tuple<U1...>&>(),
-                                                    std::declval<std::tuple<U2...>&>(),
-                                                    ROBIN_HOOD_STD::index_sequence_for<U1...>(),
-                                                    ROBIN_HOOD_STD::index_sequence_for<U2...>())))
+    // MSVC 2015 produces error "C2476: ‘constexpr’ constructor does not initialize all members"
+    // if this constructor is constexpr
+#if !ROBIN_HOOD(BROKEN_CONSTEXPR)
+    constexpr
+#endif
+        pair(std::piecewise_construct_t /*unused*/, std::tuple<U1...> a,
+             std::tuple<U2...>
+                 b) noexcept(noexcept(pair(std::declval<std::tuple<U1...>&>(),
+                                           std::declval<std::tuple<U2...>&>(),
+                                           ROBIN_HOOD_STD::index_sequence_for<U1...>(),
+                                           ROBIN_HOOD_STD::index_sequence_for<U2...>())))
         : pair(a, b, ROBIN_HOOD_STD::index_sequence_for<U1...>(),
-               ROBIN_HOOD_STD::index_sequence_for<U2...>()) {}
+               ROBIN_HOOD_STD::index_sequence_for<U2...>()) {
+    }
 
     // constructor called from the std::piecewise_construct_t ctor
     template <typename... U1, size_t... I1, typename... U2, size_t... I2>
@@ -1604,6 +1621,12 @@ public:
         for (; first != last; ++first) {
             // value_type ctor needed because this might be called with std::pair's
             insert(value_type(*first));
+        }
+    }
+
+    void insert(std::initializer_list<value_type> ilist) {
+        for (auto&& vt : ilist) {
+            insert(std::move(vt));
         }
     }
 
