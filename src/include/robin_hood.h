@@ -602,11 +602,11 @@ public:
 
 
 template <class T, size_t MinSize, size_t MaxSize>
-ES2(FI,CXPR) void _createFromMov(es2::TypeTag_t<NodeAllocator<T,MinSize,MaxSize,true>>, NodeAllocator<T,MinSize,MaxSize,true>& _dst, NodeAllocator<T,MinSize,MaxSize,true>&& _src) noexcept {
+ES2(FI,CXPR) void _createFromMov(es2::TypeTag<NodeAllocator<T,MinSize,MaxSize,true>>, NodeAllocator<T,MinSize,MaxSize,true>& _dst, NodeAllocator<T,MinSize,MaxSize,true>&& _src) noexcept {
   _dst.m_ifcAlc = es2::exchange(_src.m_ifcAlc, es2::magic::NullAllocator);
 }
 template <class T, size_t MinSize, size_t MaxSize>
-ES2(FI,CXPR) void _createFromMov(es2::TypeTag_t<NodeAllocator<T,MinSize,MaxSize,false>>,  NodeAllocator<T,MinSize,MaxSize,false>& _dst, NodeAllocator<T,MinSize,MaxSize,false>&& _src) noexcept {
+ES2(FI,CXPR) void _createFromMov(es2::TypeTag<NodeAllocator<T,MinSize,MaxSize,false>>,  NodeAllocator<T,MinSize,MaxSize,false>& _dst, NodeAllocator<T,MinSize,MaxSize,false>&& _src) noexcept {
   _dst.m_ifcAlc      = es2::exchange(_src.m_ifcAlc,      es2::magic::NullAllocator);
   _dst.mHead        = es2::exchange(_src.mHead,        nullptr);
   _dst.mListForFree = es2::exchange(_src.mListForFree, nullptr);
