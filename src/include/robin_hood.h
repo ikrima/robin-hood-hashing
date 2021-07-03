@@ -1225,7 +1225,7 @@ protected:
         // for a user-specified hash that is *not* robin_hood::hash, apply robin_hood::hash as
         // an additional mixing step. This serves as a bad hash prevention, if the given data is
         // badly mixed.
-        if constexpr(!es2t_isSame(::es2::MapKeyInfo<key_type>, KeyInfoTy)) { h = rh_hash_int(h); }
+        if constexpr(!es2t_isSame(::es2::MapKeyInfo<key_type>, KeyInfoTy)) { h = getHash(h); }
         // the lower InitialInfoNumBits are reserved for info.
         *info = mInfoInc + static_cast<InfoType>((h & InfoMask) >> mInfoHashShift);
         *idx = (h >> InitialInfoNumBits) & mMask;
