@@ -1567,6 +1567,12 @@ public:
     }
 
     template <typename Q = mapped_type>
+    typename std::enable_if<!std::is_void<Q>::value, Q&>::type operator[](key_type&& key) {
+        ROBIN_HOOD_TRACE(this)
+        return at(key);
+    }
+
+    template <typename Q = mapped_type>
     typename std::enable_if<!std::is_void<Q>::value, Q&>::type getOrInsertDflt(const key_type& key) {
         auto idxAndState = insertKeyPrepareEmptySpot(key);
         switch (idxAndState.second) {
@@ -1589,12 +1595,6 @@ public:
         }
 
         return mKeyVals[idxAndState.first].getSecond();
-    }
-
-    template <typename Q = mapped_type>
-    typename std::enable_if<!std::is_void<Q>::value, Q&>::type operator[](key_type&& key) {
-        ROBIN_HOOD_TRACE(this)
-        return at(key);
     }
 
     template <typename Q = mapped_type>
@@ -1638,13 +1638,14 @@ public:
     }
 
     template <typename... Args>
-    std::pair<iterator, bool> _emplace(Args&&... args) {
+    std::pair<iterator, bool> emplace_keyval(Args&&... args) {
         ROBIN_HOOD_TRACE(this)
-        Node n{*this, std::forward<Args>(args)...};
+        Node{*this, std::forward<Args>(args)...};
         auto idxAndState = insertKeyPrepareEmptySpot(getFirstConst(n));
         switch (idxAndState.second) {
         case InsertionState::key_found:
             n.destroy(*this);
+            doThrow<detail::out_of_range>("key already exists");
             break;
 
         case InsertionState::new_node:
@@ -1713,11 +1714,11 @@ public:
 
     std::pair<iterator, bool> insert(const value_type& keyval) {
         ROBIN_HOOD_TRACE(this)
-        return _emplace(keyval);
+        return emplace_keyval(keyval);
     }
 
     std::pair<iterator, bool> insert(value_type&& keyval) {
-        return _emplace(std::move(keyval));
+        return emplace_keyval(std::move(keyval));
     }
 
     // Returns 1 if key is found, 0 otherwise.
