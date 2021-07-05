@@ -788,9 +788,9 @@ struct has_is_transparent<T, typename void_type<typename T::is_transparent>::typ
 template <bool IsFlat, typename Key, typename T, typename KeyInfoTy>
 class Table
     : public detail::NodeAllocator<
-          typename std::conditional_t<
+          std::conditional_t<
               std::is_void_v<T>, Key,
-              robin_hood::pair<typename std::conditional_t<IsFlat, Key, Key const>, T>>,
+              robin_hood::pair<std::conditional_t<IsFlat, Key, Key const>, T>>,
           4, 16384, IsFlat> {
 public:
     static constexpr bool is_flat = IsFlat;
@@ -914,7 +914,7 @@ protected:
         template <typename... Args>
         explicit DataNode(M& map, Args&&... args)
             : mData(map.allocate()) {
-            ES2PLCNEW_EX(static_cast<void*>(mData),value_type)(std::forward<Args>(args)...);
+            es2PlcNewEx(static_cast<void*>(mData),value_type)(std::forward<Args>(args)...);
         }
 
         DataNode(M& ROBIN_HOOD_UNUSED(map) /*unused*/, DataNode<M, false>&& n) noexcept
@@ -1035,7 +1035,7 @@ protected:
 
             for (size_t i = 0; i < numElementsWithBuffer; ++i) {
                 if (t.mInfo[i]) {
-                    ES2PLCNEW_EX(static_cast<void*>(t.mKeyVals + i),Node)(t, *s.mKeyVals[i]);
+                    es2PlcNewEx(static_cast<void*>(t.mKeyVals + i),Node)(t, *s.mKeyVals[i]);
                 }
             }
         }
@@ -1246,7 +1246,7 @@ protected:
     shiftUp(size_t startIdx,
             size_t const insertion_idx) noexcept(std::is_nothrow_move_assignable<Node>::value) {
         auto idx = startIdx;
-        ES2PLCNEW_EX(static_cast<void*>(mKeyVals + idx),Node)(std::move(mKeyVals[idx - 1]));
+        es2PlcNewEx(static_cast<void*>(mKeyVals + idx),Node)(std::move(mKeyVals[idx - 1]));
         while (--idx != insertion_idx) {
             mKeyVals[idx] = std::move(mKeyVals[idx - 1]);
         }
@@ -1347,7 +1347,7 @@ protected:
 
         auto& l = mKeyVals[insertion_idx];
         if (idx == insertion_idx) {
-            ES2PLCNEW_EX(static_cast<void*>(&l),Node)(std::move(keyval));
+            es2PlcNewEx(static_cast<void*>(&l),Node)(std::move(keyval));
         } else {
             shiftUp(idx, insertion_idx);
             l = std::move(keyval);
@@ -1574,7 +1574,7 @@ public:
             break;
 
         case InsertionState::new_node:
-            ES2PLCNEW_EX(static_cast<void*>(&mKeyVals[idxAndState.first]),Node)
+            es2PlcNewEx(static_cast<void*>(&mKeyVals[idxAndState.first]),Node)
                 (*this, std::piecewise_construct, std::forward_as_tuple(key),
                      std::forward_as_tuple());
             break;
@@ -1605,7 +1605,7 @@ public:
             break;
 
         case InsertionState::new_node:
-            ES2PLCNEW_EX(static_cast<void*>(&mKeyVals[idxAndState.first]),Node)
+            es2PlcNewEx(static_cast<void*>(&mKeyVals[idxAndState.first]),Node)
                 (*this, std::piecewise_construct, std::forward_as_tuple(std::move(key)),
                      std::forward_as_tuple());
             break;
@@ -1648,7 +1648,7 @@ public:
             break;
 
         case InsertionState::new_node:
-            ES2PLCNEW_EX(static_cast<void*>(&mKeyVals[idxAndState.first]),Node)(*this, std::move(n));
+            es2PlcNewEx(static_cast<void*>(&mKeyVals[idxAndState.first]),Node)(*this, std::move(n));
             break;
 
         case InsertionState::overwrite_node:
@@ -2100,7 +2100,7 @@ protected:
             break;
 
         case InsertionState::new_node:
-            ES2PLCNEW_EX(static_cast<void*>(&mKeyVals[idxAndState.first]),Node)(
+            es2PlcNewEx(static_cast<void*>(&mKeyVals[idxAndState.first]),Node)(
                 *this, std::piecewise_construct, std::forward_as_tuple(std::forward<OtherKey>(key)),
                 std::forward_as_tuple(std::forward<Args>(args)...));
             break;
@@ -2130,7 +2130,7 @@ protected:
             break;
 
         case InsertionState::new_node:
-            ES2PLCNEW_EX(static_cast<void*>(&mKeyVals[idxAndState.first]),Node)(
+            es2PlcNewEx(static_cast<void*>(&mKeyVals[idxAndState.first]),Node)(
                 *this, std::piecewise_construct, std::forward_as_tuple(std::forward<OtherKey>(key)),
                 std::forward_as_tuple(std::forward<Mapped>(obj)));
             break;
