@@ -79,6 +79,7 @@
 #ifdef ROBIN_HOOD_COUNT_ENABLED
 #    include <iostream>
 #    define ROBIN_HOOD_COUNT(x) ++counts().x;
+namespace es2 {
 namespace robin_hood {
 struct Counts {
     uint64_t shiftUp{};
@@ -93,6 +94,7 @@ static Counts& counts() {
     return counts;
 }
 } // namespace robin_hood
+} // namespace es2
 #else
 #    define ROBIN_HOOD_COUNT(x)
 #endif
@@ -249,8 +251,9 @@ static Counts& counts() {
 #else
 #    define ROBIN_HOOD_PRIVATE_DEFINITION_NODISCARD()
 #endif
-
+namespace es2 {
 namespace robin_hood {
+
 struct std_bad_alloc{};
 #if ROBIN_HOOD(CXX) >= ROBIN_HOOD(CXX14)
 #    define ROBIN_HOOD_STD std
@@ -335,44 +338,33 @@ using SizeT = uint64_t;
 using SizeT = uint32_t;
 #endif
 
-template <typename T>
-T rotr(T x, unsigned k) {
-    return (x >> k) | (x << (8U * sizeof(T) - k));
-}
-
 // This cast gets rid of warnings like "cast from 'uint8_t*' {aka 'unsigned char*'} to
 // 'uint64_t*' {aka 'long unsigned int*'} increases required alignment of target type". Use with
 // care!
 template <typename T>
-ES2(FI) T reinterpret_cast_no_cast_align_warning(void* ptr) noexcept {
+ES2(CONST,FI) T reinterpret_cast_no_cast_align_warning(void* ptr) noexcept {
     return reinterpret_cast<T>(ptr);
 }
 
 template <typename T>
-ES2(FI) T reinterpret_cast_no_cast_align_warning(void const* ptr) noexcept {
+ES2(CONST,FI) T reinterpret_cast_no_cast_align_warning(void const* ptr) noexcept {
     return reinterpret_cast<T>(ptr);
 }
 
 #if ROBIN_HOOD(HAS_EXCEPTIONS)
 using out_of_range = std::out_of_range;
 #else
-using out_of_range = uint8_t;
+struct out_of_range{};
 #endif
 // make sure this is not inlined as it is slow and dramatically enlarges code, thus making other
 // inlinings more difficult. Throws are also generally the slow path.
+#if ROBIN_HOOD(HAS_EXCEPTIONS)
 template <typename E, typename... Args>
 [[noreturn]] ROBIN_HOOD(NOINLINE)
-#if ROBIN_HOOD(HAS_EXCEPTIONS)
-    void doThrow(Args&&... args) {
+void doThrow(Args&&... args) {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay)
     throw E(std::forward<Args>(args)...);
 }
-#else
-    void doThrow(Args&&... args) {
-    ROBINHOOD_ABORT(std::forward<Args>(args)...);
-}
-#endif
-
 template <typename E, typename T, typename... Args>
 T* assertNotNull(T* t, Args&&... args) {
     if (ROBIN_HOOD_UNLIKELY(nullptr == t)) {
@@ -380,6 +372,21 @@ T* assertNotNull(T* t, Args&&... args) {
     }
     return t;
 }
+#else
+template <typename E, size_t N>
+[[noreturn]] ROBIN_HOOD(NOINLINE)
+void doThrow(arg_str<N> const& errorMsg) {
+    ROBINHOOD_ABORT(errorMsg);
+}
+
+template <typename E, typename T>
+ES2(FI) T* assertNotNull(T* t) {
+    if (ROBIN_HOOD_UNLIKELY(nullptr == t)) {
+        doThrow<E>("bad alloc");
+    }
+    return t;
+}
+#endif
 
 template <typename T>
 ES2(FI) T unaligned_load(void const* ptr) noexcept {
@@ -2080,7 +2087,7 @@ protected:
 #if ROBIN_HOOD(HAS_EXCEPTIONS)
         throw std::overflow_error("robin_hood::map overflow");
 #else
-        ROBINHOOD_ABORT();
+        ROBINHOOD_ABORT("map overflow");
 #endif
     }
 
@@ -2349,5 +2356,6 @@ using unordered_set = detail::Table<sizeof(Key) <= sizeof(size_t) * 6 &&
                                     Key, void, KeyInfoTy>;
 
 } // namespace robin_hood
+} // namespace es2
 
 #endif
