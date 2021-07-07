@@ -430,7 +430,7 @@ public:
         mListForFree = o.mListForFree;
         o.mListForFree = nullptr;
         o.mHead = nullptr;
-        o.m_ifcAlc = nullptr;
+        o.m_ifcAlc = es2::magic::NullAllocator;
         return *this;
     }
 
@@ -578,7 +578,7 @@ private:
     static_assert(ALIGNED_SIZE >= sizeof(T*), "ALIGNED_SIZE");
     static_assert(0 == (ALIGNED_SIZE % sizeof(T*)), "ALIGNED_SIZE mod");
     static_assert(ALIGNMENT >= sizeof(T*), "ALIGNMENT");
-  protected:
+  public:
     es2::Alloc_ifc m_ifcAlc;
     T* mHead{nullptr};
     T** mListForFree{nullptr};
